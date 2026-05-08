@@ -30,7 +30,10 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  permission_handler: ^11.3.1
+  shared_preferences: ^2.2.3
   esc_pos_utils_plus: ^2.0.4
+  print_bluetooth_thermal: ^1.1.6
   app_links: ^6.4.0
   http: ^1.2.1
   # The following adds the Cupertino Icons font to your application.
