@@ -11,7 +11,7 @@
     android:required="false" />
 
     <application
-        android:label="madapos_restaurant_print_bridge"
+        android:label="MadaPOS iPrint"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
