@@ -107,21 +107,22 @@ class PrintService {
 
       final profile = await CapabilityProfile.load();
       final generator = Generator(paperSize, profile);
-      final ByteData data = await rootBundle.load('assets/images/footer.png');
-      final Uint8List bytesImage = data.buffer.asUint8List();
-      final img.Image? image = img.decodeImage(bytesImage);
+            
+      List<int> bytes = [];
+
+      bytes += generator.reset();
+      bytes += generator.hr();
+      bytes += generator.feed(1);
 
       final ByteData dataLogo = await rootBundle.load(
         'assets/images/store-logo.png',
       );
       final Uint8List bytesLogo = dataLogo.buffer.asUint8List();
       final img.Image? imageLogo = img.decodeImage(bytesLogo);
-      List<int> bytes = [];
-
-      bytes += generator.reset();
-      bytes += generator.hr();
       if (imageLogo != null) {
-        bytes += generator.image(imageLogo, align: PosAlign.center);
+        final resized = img.copyResize(imageLogo, width: 200);
+        bytes += generator.image(resized, align: PosAlign.center);
+        bytes += generator.feed(1);
       }
       bytes += generator.text(
         "TEST PRINT",
@@ -141,8 +142,13 @@ class PrintService {
       );
       bytes += generator.feed(3);
 
-      if (image != null) {
-        bytes += generator.image(image, align: PosAlign.center);
+      final ByteData dataFooter = await rootBundle.load('assets/images/footer.png');
+      final Uint8List bytesImageFooter = dataFooter.buffer.asUint8List();
+      final img.Image? imageFooter = img.decodeImage(bytesImageFooter);
+      if (imageFooter != null) {
+        final resizedFooter = img.copyResize(imageFooter, width: 200);
+        bytes += generator.image(resizedFooter, align: PosAlign.center);
+        bytes += generator.feed(1);
       }
 
       // AUTO CUT
@@ -154,6 +160,7 @@ class PrintService {
       if (printer.cashDrawer) {
         bytes += generator.drawer();
       }
+      bytes += generator.reset();
 
       await PrintBluetoothThermal.writeBytes(bytes);
     } catch (e) {
