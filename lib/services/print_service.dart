@@ -6,58 +6,35 @@ import '../models/printer_model.dart';
 import 'printer_storage_service.dart';
 
 class PrintService {
-
   static Future<void> printReceipt(dynamic data, PrinterModel printer) async {
-
     try {
+      PaperSize paperSize = printer.paper == '58'
+          ? PaperSize.mm58
+          : PaperSize.mm80;
 
-      
-      // =========================
-      // PAPER SIZE
-      // =========================
-
-      PaperSize paperSize =
-          printer.paper == '58'
-              ? PaperSize.mm58
-              : PaperSize.mm80;
-
-      final profile =
-          await CapabilityProfile.load();
-
-      final generator = Generator(
-        paperSize,
-        profile,
-      );
+      final profile = await CapabilityProfile.load();
+      final generator = Generator(paperSize, profile);
 
       List<int> bytes = [];
 
       // =========================
-      // STORE
+      // Ambil data nama toko dari payload
       // =========================
-
       bytes += generator.text(
-
         data['store']['name'],
-
         styles: const PosStyles(
           align: PosAlign.center,
           bold: true,
           height: PosTextSize.size2,
           width: PosTextSize.size2,
         ),
-
       );
-
       bytes += generator.emptyLines(1);
 
       // =========================
       // INVOICE
       // =========================
-
-      bytes += generator.text(
-        "Invoice : ${data['receipt']['sale_uid']}",
-      );
-
+      bytes += generator.text("Invoice : ${data['receipt']['sale_uid']}");
       bytes += generator.hr();
 
       // =========================
@@ -67,32 +44,15 @@ class PrintService {
       final carts = data['carts'];
 
       carts.forEach((key, item) {
-
-        final name =
-            item['product']['name'];
-
-        final qty =
-            item['qty'];
-
-        final subtotal =
-            item['sub_total'];
-
+        final name = item['product']['name'];
+        final qty = item['qty'];
+        final subtotal = item['sub_total'];
+        bytes += generator.text("$name x$qty");
         bytes += generator.text(
-          "$name x$qty",
-        );
-
-        bytes += generator.text(
-
           subtotal.toString(),
-
-          styles: const PosStyles(
-            align: PosAlign.right,
-          ),
-
+          styles: const PosStyles(align: PosAlign.right),
         );
-
       });
-
       bytes += generator.hr();
 
       // =========================
@@ -100,7 +60,6 @@ class PrintService {
       // =========================
 
       bytes += generator.text(
-
         "TOTAL : ${data['receipt']['grand_total']}",
 
         styles: const PosStyles(
@@ -109,7 +68,6 @@ class PrintService {
           height: PosTextSize.size2,
           width: PosTextSize.size2,
         ),
-
       );
 
       bytes += generator.feed(3);
@@ -122,96 +80,69 @@ class PrintService {
       // =========================
 
       if (printer.cashDrawer) {
-
         bytes += generator.drawer();
-
       }
 
       // =========================
       // PRINT
       // =========================
 
-      await PrintBluetoothThermal.writeBytes(
-        bytes,
-      );
-
+      await PrintBluetoothThermal.writeBytes(bytes);
     } catch (e) {
-
       debugPrint(e.toString());
-
     }
-
   }
 
-
-
-  static Future<void> printTest(PrinterModel printer,) async {
-
+  // =========================
+  // PRINT TEST
+  // =========================
+  static Future<void> printTest(PrinterModel printer) async {
     try {
-      PaperSize paperSize =
-          printer.paper == '58'
-              ? PaperSize.mm58
-              : PaperSize.mm80;
+      PaperSize paperSize = printer.paper == '58'
+          ? PaperSize.mm58
+          : PaperSize.mm80;
 
       final profile = await CapabilityProfile.load();
-
-      final generator = Generator(
-        paperSize,
-        profile,
-      );
-
+      final generator = Generator(paperSize, profile);
       List<int> bytes = [];
 
+      bytes += generator.reset();
+      bytes += generator.hr();
       bytes += generator.text(
+        "TEST PRINT",
+        styles: const PosStyles(align: PosAlign.center),
+      );
 
+      bytes += generator.feed(1);
+      bytes += generator.text(
         "Berhasil terhubung\nke Printer via Bluetooth",
-
-        styles: const PosStyles(
-          align: PosAlign.center,
-          bold: true,
-          height: PosTextSize.size2,
-          width: PosTextSize.size2,
-        ),
-
+        styles: const PosStyles(align: PosAlign.center, bold: true),
       );
 
       bytes += generator.emptyLines(1);
-
       bytes += generator.text(
-
         printer.address,
-
-        styles: const PosStyles(
-          align: PosAlign.center,
-        ),
-
+        styles: const PosStyles(align: PosAlign.center),
       );
-
       bytes += generator.feed(3);
 
       // AUTO CUT
       if (printer.autoCut) {
-
         bytes += generator.cut();
-
       }
 
       // CASH DRAWER
       if (printer.cashDrawer) {
-
         bytes += generator.drawer();
-
       }
 
-      await PrintBluetoothThermal.writeBytes(
-        bytes,
-      );
-
+      await PrintBluetoothThermal.writeBytes(bytes);
     } catch (e) {
-
       debugPrint(e.toString());
-
     }
-
   }
+
+  // =========================
+  // PRINT TEST
+  // =========================
 }
