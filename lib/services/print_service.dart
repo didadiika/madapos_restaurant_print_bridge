@@ -1,6 +1,9 @@
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'dart:typed_data';
+import 'package:image/image.dart' as img;
 
 import '../models/printer_model.dart';
 import 'printer_storage_service.dart';
@@ -104,10 +107,22 @@ class PrintService {
 
       final profile = await CapabilityProfile.load();
       final generator = Generator(paperSize, profile);
+      final ByteData data = await rootBundle.load('assets/images/footer.png');
+      final Uint8List bytesImage = data.buffer.asUint8List();
+      final img.Image? image = img.decodeImage(bytesImage);
+
+      final ByteData dataLogo = await rootBundle.load(
+        'assets/images/store-logo.png',
+      );
+      final Uint8List bytesLogo = dataLogo.buffer.asUint8List();
+      final img.Image? imageLogo = img.decodeImage(bytesLogo);
       List<int> bytes = [];
 
       bytes += generator.reset();
       bytes += generator.hr();
+      if (imageLogo != null) {
+        bytes += generator.image(imageLogo, align: PosAlign.center);
+      }
       bytes += generator.text(
         "TEST PRINT",
         styles: const PosStyles(align: PosAlign.center),
@@ -125,6 +140,10 @@ class PrintService {
         styles: const PosStyles(align: PosAlign.center),
       );
       bytes += generator.feed(3);
+
+      if (image != null) {
+        bytes += generator.image(image, align: PosAlign.center);
+      }
 
       // AUTO CUT
       if (printer.autoCut) {
