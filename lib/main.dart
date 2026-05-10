@@ -340,120 +340,145 @@ class _PrintListenerPageState extends State<PrintListenerPage> {
   // FETCH TRANSACTION
   // =========================
 
-  Future<void> fetchTransaction(String trxId) async {
-    try {
-      final response = await http.get(
-        Uri.parse(
-          'https://irons-cafe.madapos.cloud/load-struk/$trxId/user/24b95afb-8455-4911-902a-dfd2c954d274',
-        ),
-      );
+Future<void> fetchTransaction(String trxId) async {
+  try {
+    setState(() {
+      message = "Mengambil data transaksi...";
+    });
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        // Ambil data nama toko dari json response API
-        final storeName = data['store']['name'];
-        // Ambil invoice dari json response API
-        final invoice = data['receipt']['sale_uid'];
-        // Ambil grand total dari json response API
-        final total = data['receipt']['grand_total'];
-        // Ambil carts dari json response API
-        final carts = data['carts'];
+    final url =
+        'https://irons-cafe.madapos.cloud/load-struk/$trxId/user/24b95afb-8455-4911-902a-dfd2c954d274';
 
-        debugPrint("Store: $storeName");
-        debugPrint("Invoice: $invoice");
-        debugPrint("Total: $total");
+    final response = await http
+        .get(Uri.parse(url))
+        .timeout(const Duration(seconds: 20));
 
-        // looping carts untuk print nama product, qty, dan subtotal
-        carts.forEach((key, item) {
-          final productName = item['product']['name'];
-          final qty = item['qty'];
-          final subtotal = item['sub_total'];
-
-          debugPrint("$productName x$qty = $subtotal");
-        });
-
-        setState(() {
-          message = "Invoice $invoice berhasil dimuat";
-        });
-
-        // Gunakan printer yang sedang dipilih
-        PrinterModel? printer = selectedPrinter;
-
-        // Jika belum ada, gunakan printer pertama yang tersimpan
-        printer ??= await PrinterStorageService.getDefaultPrinter();
-
-        if (printer == null) {
-          setState(() {
-            message = "Tidak ada printer yang dipilih";
-          });
-          return;
-        }
-
-        try {
-          // Tutup koneksi lama
-          try {
-            await PrintBluetoothThermal.disconnect;
-            await Future.delayed(const Duration(milliseconds: 500));
-          } catch (_) {}
-
-          // Connect printer
-          final connected = await PrintBluetoothThermal.connect(
-            macPrinterAddress: printer.address,
-          );
-
-          if (!connected) {
-            setState(() {
-              message = "Gagal connect printer";
-            });
-            return;
-          }
-
-          // Update UI
-          setState(() {
-            selectedPrinter = printer;
-            connectedAddress = printer!.address;
-            isConnected = true;
-            message = "Mencetak invoice...";
-          });
-
-          // Print
-          await PrintService.printReceipt(data, printer);
-
-          // Tunggu sebentar agar data selesai dikirim
-          await Future.delayed(const Duration(milliseconds: 500));
-
-          // Disconnect
-          try {
-            await PrintBluetoothThermal.disconnect;
-          } catch (_) {}
-
-          // Update UI
-          if (!mounted) return;
-          setState(() {
-            isConnected = false;
-            message = "Print job selesai";
-          });
-
-          debugPrint("Print job selesai");
-        } catch (e) {
-          debugPrint("Print error: $e");
-          setState(() {
-            message = "Gagal mencetak";
-          });
-        }
-      } else {
-        setState(() {
-          message = "Gagal ambil data";
-        });
-      }
-    } catch (e) {
-      debugPrint(e.toString());
-
+    if (response.statusCode != 200) {
       setState(() {
-        message = "Error koneksi";
+        message = "Gagal ambil data (${response.statusCode})";
+      });
+      return;
+    }
+
+    final data = jsonDecode(response.body);
+
+    final storeName = data['store']?['name'] ?? '';
+    final invoice = data['receipt']?['sale_uid'] ?? '';
+    final total = data['receipt']?['grand_total'] ?? '';
+
+    debugPrint("Store: $storeName");
+    debugPrint("Invoice: $invoice");
+    debugPrint("Total: $total");
+
+    // =====================================================
+    // DEBUG CARTS
+    // carts bisa berupa List atau Map
+    // =====================================================
+    final carts = data['carts'];
+
+    if (carts is List) {
+      for (final item in carts) {
+        final productName = item['product']?['name'] ?? '';
+        final qty = item['qty'] ?? 0;
+        final subtotal = item['sub_total'] ?? 0;
+
+        debugPrint("$productName x$qty = $subtotal");
+      }
+    } else if (carts is Map) {
+      carts.forEach((key, item) {
+        final productName = item['product']?['name'] ?? '';
+        final qty = item['qty'] ?? 0;
+        final subtotal = item['sub_total'] ?? 0;
+
+        debugPrint("$productName x$qty = $subtotal");
       });
     }
+
+    if (!mounted) return;
+    setState(() {
+      message = "Invoice $invoice berhasil dimuat";
+    });
+
+    // =====================================================
+    // AMBIL PRINTER
+    // =====================================================
+    PrinterModel? printer = selectedPrinter;
+    printer ??= await PrinterStorageService.getDefaultPrinter();
+
+    if (printer == null) {
+      if (!mounted) return;
+      setState(() {
+        message = "Tidak ada printer yang dipilih";
+      });
+      return;
+    }
+
+    try {
+      // Disconnect koneksi sebelumnya
+      try {
+        await PrintBluetoothThermal.disconnect;
+        await Future.delayed(const Duration(milliseconds: 500));
+      } catch (_) {}
+
+      // Connect ke printer
+      final connected = await PrintBluetoothThermal.connect(
+        macPrinterAddress: printer.address,
+      );
+
+      if (!connected) {
+        if (!mounted) return;
+        setState(() {
+          message = "Gagal connect printer";
+        });
+        return;
+      }
+
+      if (!mounted) return;
+      setState(() {
+        selectedPrinter = printer;
+        connectedAddress = printer!.address;
+        isConnected = true;
+        message = "Mencetak invoice...";
+      });
+
+      // Print struk
+      await PrintService.printReceipt(data, printer);
+
+      // Tunggu sebentar
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      // Disconnect setelah print
+      try {
+        await PrintBluetoothThermal.disconnect;
+      } catch (_) {}
+
+      if (!mounted) return;
+      setState(() {
+        isConnected = false;
+        message = "Print job selesai";
+      });
+    } catch (e) {
+      debugPrint("Print error: $e");
+
+      if (!mounted) return;
+      setState(() {
+        message = "Gagal mencetak";
+      });
+    }
+  } on TimeoutException {
+    if (!mounted) return;
+    setState(() {
+      message = "Timeout koneksi server";
+    });
+  } catch (e) {
+    debugPrint("Fetch transaction error: $e");
+
+    if (!mounted) return;
+    setState(() {
+      message = "Error: $e";
+    });
   }
+}
 
   @override
   void initState() {
