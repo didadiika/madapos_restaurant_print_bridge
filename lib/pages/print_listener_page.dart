@@ -1,10 +1,8 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 
 import '../constants/printer_connection.dart';
@@ -14,6 +12,7 @@ import '../services/print_service.dart';
 import '../services/printer_storage_service.dart';
 import '../services/transaction_service.dart';
 import '../widgets/printer_setting_dialog.dart';
+import '../widgets/base_url_setting_dialog.dart';
 
 // =========================
 // KELAS UNTUK MENGHANDLE BACKGROUND
@@ -333,6 +332,18 @@ Future<void> fetchTransaction(String trxId, String userId) async {
       appBar: AppBar(
         title: const Text("Madapos Restaurant Print Bridge"),
         centerTitle: true,
+        actions: [
+            IconButton(
+            icon: const Icon(Icons.settings),
+            tooltip: 'Setting Endpoint',
+            onPressed: () async {
+                await showDialog(
+                context: context,
+                builder: (_) => const BaseUrlSettingDialog(),
+                );
+            },
+            ),
+        ],
       ),
 
       body: RefreshIndicator(
