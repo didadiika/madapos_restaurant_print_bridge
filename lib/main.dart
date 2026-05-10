@@ -33,8 +33,7 @@ class MyApp extends StatelessWidget {
 }
 
 class AppBackground {
-  static const MethodChannel _channel =
-      MethodChannel('madapos/background');
+  static const MethodChannel _channel = MethodChannel('madapos/background');
 
   static Future<void> minimize() async {
     try {
@@ -354,148 +353,147 @@ class _PrintListenerPageState extends State<PrintListenerPage> {
   // FETCH TRANSACTION
   // =========================
 
-Future<void> fetchTransaction(String trxId) async {
-  try {
-    setState(() {
-      message = "Mengambil data transaksi...";
-    });
-
-    final url =
-        'https://k24.madapos.cloud/load-struk/$trxId/user/24b95afb-8455-4911-902a-dfd2c954d274';
-
-    final response = await http
-        .get(Uri.parse(url))
-        .timeout(const Duration(seconds: 20));
-
-    if (response.statusCode != 200) {
-      setState(() {
-        message = "Gagal ambil data (${response.statusCode})";
-      });
-      return;
-    }
-
-    final data = jsonDecode(response.body);
-
-    final storeName = data['store']?['name'] ?? '';
-    final invoice = data['receipt']?['sale_uid'] ?? '';
-    final total = data['receipt']?['grand_total'] ?? '';
-
-    debugPrint("Store: $storeName");
-    debugPrint("Invoice: $invoice");
-    debugPrint("Total: $total");
-
-    // =====================================================
-    // DEBUG CARTS
-    // carts bisa berupa List atau Map
-    // =====================================================
-    final carts = data['carts'];
-
-    if (carts is List) {
-      for (final item in carts) {
-        final productName = item['product']?['name'] ?? '';
-        final qty = item['qty'] ?? 0;
-        final subtotal = item['sub_total'] ?? 0;
-
-        debugPrint("$productName x$qty = $subtotal");
-      }
-    } else if (carts is Map) {
-      carts.forEach((key, item) {
-        final productName = item['product']?['name'] ?? '';
-        final qty = item['qty'] ?? 0;
-        final subtotal = item['sub_total'] ?? 0;
-
-        debugPrint("$productName x$qty = $subtotal");
-      });
-    }
-
-    if (!mounted) return;
-    setState(() {
-      message = "Invoice $invoice berhasil dimuat";
-    });
-
-    // =====================================================
-    // AMBIL PRINTER
-    // =====================================================
-    PrinterModel? printer = selectedPrinter;
-    printer ??= await PrinterStorageService.getDefaultPrinter();
-
-    if (printer == null) {
-      if (!mounted) return;
-      setState(() {
-        message = "Tidak ada printer yang dipilih";
-      });
-      return;
-    }
-
+  Future<void> fetchTransaction(String trxId, String userId) async {
     try {
-      // Disconnect koneksi sebelumnya
-      try {
-        await PrintBluetoothThermal.disconnect;
-        await Future.delayed(const Duration(milliseconds: 500));
-      } catch (_) {}
+      setState(() {
+        message = "Mengambil data transaksi...";
+      });
 
-      // Connect ke printer
-      final connected = await PrintBluetoothThermal.connect(
-        macPrinterAddress: printer.address,
-      );
+      final url = 'https://k24.madapos.cloud/load-struk/$trxId/user/$userId';
 
-      if (!connected) {
-        if (!mounted) return;
+      final response = await http
+          .get(Uri.parse(url))
+          .timeout(const Duration(seconds: 20));
+
+      if (response.statusCode != 200) {
         setState(() {
-          message = "Gagal connect printer";
+          message = "Gagal ambil data (${response.statusCode})";
         });
         return;
       }
 
+      final data = jsonDecode(response.body);
+
+      final storeName = data['store']?['name'] ?? '';
+      final invoice = data['receipt']?['sale_uid'] ?? '';
+      final total = data['receipt']?['grand_total'] ?? '';
+
+      debugPrint("Store: $storeName");
+      debugPrint("Invoice: $invoice");
+      debugPrint("Total: $total");
+
+      // =====================================================
+      // DEBUG CARTS
+      // carts bisa berupa List atau Map
+      // =====================================================
+      final carts = data['carts'];
+
+      if (carts is List) {
+        for (final item in carts) {
+          final productName = item['product']?['name'] ?? '';
+          final qty = item['qty'] ?? 0;
+          final subtotal = item['sub_total'] ?? 0;
+
+          debugPrint("$productName x$qty = $subtotal");
+        }
+      } else if (carts is Map) {
+        carts.forEach((key, item) {
+          final productName = item['product']?['name'] ?? '';
+          final qty = item['qty'] ?? 0;
+          final subtotal = item['sub_total'] ?? 0;
+
+          debugPrint("$productName x$qty = $subtotal");
+        });
+      }
+
       if (!mounted) return;
       setState(() {
-        selectedPrinter = printer;
-        connectedAddress = printer!.address;
-        isConnected = true;
-        message = "Mencetak invoice...";
+        message = "Invoice $invoice berhasil dimuat";
       });
 
-      // Print struk
-      await PrintService.printReceipt(data, printer);
+      // =====================================================
+      // AMBIL PRINTER
+      // =====================================================
+      PrinterModel? printer = selectedPrinter;
+      printer ??= await PrinterStorageService.getDefaultPrinter();
 
-      // Tunggu sebentar
-      await Future.delayed(const Duration(milliseconds: 500));
+      if (printer == null) {
+        if (!mounted) return;
+        setState(() {
+          message = "Tidak ada printer yang dipilih";
+        });
+        return;
+      }
 
-      // Disconnect setelah print
       try {
-        await PrintBluetoothThermal.disconnect;
-      } catch (_) {}
+        // Disconnect koneksi sebelumnya
+        try {
+          await PrintBluetoothThermal.disconnect;
+          await Future.delayed(const Duration(milliseconds: 500));
+        } catch (_) {}
 
-      // Minimalkan aplikasi ke background tanpa menutup proses
-      await AppBackground.minimize();
+        // Connect ke printer
+        final connected = await PrintBluetoothThermal.connect(
+          macPrinterAddress: printer.address,
+        );
 
+        if (!connected) {
+          if (!mounted) return;
+          setState(() {
+            message = "Gagal connect printer";
+          });
+          return;
+        }
+
+        if (!mounted) return;
+        setState(() {
+          selectedPrinter = printer;
+          connectedAddress = printer!.address;
+          isConnected = true;
+          message = "Mencetak invoice...";
+        });
+
+        // Print struk
+        await PrintService.printReceipt(data, printer);
+
+        // Tunggu sebentar
+        await Future.delayed(const Duration(milliseconds: 500));
+
+        // Disconnect setelah print
+        try {
+          await PrintBluetoothThermal.disconnect;
+        } catch (_) {}
+
+        // Minimalkan aplikasi ke background tanpa menutup proses
+        await AppBackground.minimize();
+
+        if (!mounted) return;
+        setState(() {
+          isConnected = false;
+          message = "Print job selesai";
+        });
+      } catch (e) {
+        debugPrint("Print error: $e");
+
+        if (!mounted) return;
+        setState(() {
+          message = "Gagal mencetak";
+        });
+      }
+    } on TimeoutException {
       if (!mounted) return;
       setState(() {
-        isConnected = false;
-        message = "Print job selesai";
+        message = "Timeout koneksi server";
       });
     } catch (e) {
-      debugPrint("Print error: $e");
+      debugPrint("Fetch transaction error: $e");
 
       if (!mounted) return;
       setState(() {
-        message = "Gagal mencetak";
+        message = "Error: $e";
       });
     }
-  } on TimeoutException {
-    if (!mounted) return;
-    setState(() {
-      message = "Timeout koneksi server";
-    });
-  } catch (e) {
-    debugPrint("Fetch transaction error: $e");
-
-    if (!mounted) return;
-    setState(() {
-      message = "Error: $e";
-    });
   }
-}
 
   @override
   void initState() {
@@ -537,22 +535,24 @@ Future<void> fetchTransaction(String trxId) async {
   }
 
   static Future<void> moveAppToBackground() async {
-  try {
-    await SystemChannels.platform.invokeMethod('SystemNavigator.pop', false);
-  } catch (e) {
-    debugPrint('Failed to move app to background: $e');
-  }
+    try {
+      await SystemChannels.platform.invokeMethod('SystemNavigator.pop', false);
+    } catch (e) {
+      debugPrint('Failed to move app to background: $e');
+    }
   }
 
   void handleUri(Uri uri) async {
+    // Ambil parameter dari deep link, misalnya: madapos://print?id=12345
     final trxId = uri.queryParameters['id'];
+    final userId = uri.queryParameters['userId'];
 
     setState(() {
       message = "Loading transaksi...";
     });
 
-    if (trxId != null) {
-      await fetchTransaction(trxId);
+    if (trxId != null && userId != null) {
+      await fetchTransaction(trxId, userId);
     }
   }
 
