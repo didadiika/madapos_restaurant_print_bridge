@@ -457,23 +457,14 @@ class PrintService {
       bytes += generator.hr();
       bytes += generator.feed(1);
 
-      // final ByteData dataLogo = await rootBundle.load(
-      //   'assets/images/store-logo.png',
-      // );
-      final response = await http.get(Uri.parse('https://irons-cafe.madapos.cloud/storage/store-images/irons.png'));
-      if (response.statusCode != 200) {
-        throw Exception('Gagal download image');
-      }
-      final img.Image? originalImage = img.decodeImage(response.bodyBytes);
-      if (originalImage == null) {
-        throw Exception('Format image tidak valid');
-      }
-      // final Uint8List bytesLogo = response.bodyBytes;
-      // final img.Image? imageLogo = img.decodeImage(bytesLogo);
-      
-        bytes += generator.image(originalImage, align: PosAlign.center);
+      final ByteData dataLogo = await rootBundle.load('assets/images/store-default.png');
+      final Uint8List bytesLogo = dataLogo.buffer.asUint8List();
+      final img.Image? imageLogo = img.decodeImage(bytesLogo);
+      if (imageLogo != null) {
+        final resizedLogo = img.copyResize(imageLogo, height: 175);
+        bytes += generator.image(resizedLogo, align: PosAlign.center);
         bytes += generator.feed(1);
-      
+      }
       bytes += generator.text(
         "TEST PRINT",
         styles: const PosStyles(align: PosAlign.center),

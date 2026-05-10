@@ -66,7 +66,7 @@ flutter:
   assets:
     - assets/images/app-logo.png
     - assets/images/footer.png
-    - assets/images/store-logo.png
+    - assets/images/store-default.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:
