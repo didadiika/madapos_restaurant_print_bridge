@@ -12,6 +12,7 @@ import '../models/printer_model.dart';
 import '../services/bluetooth_service.dart';
 import '../services/print_service.dart';
 import '../services/printer_storage_service.dart';
+import '../services/transaction_service.dart';
 import '../widgets/printer_setting_dialog.dart';
 
 // =========================
@@ -191,150 +192,81 @@ class _PrintListenerPageState extends State<PrintListenerPage> {
   // FETCH TRANSACTION
   // =========================
 
-  Future<void> fetchTransaction(String trxId, String userId) async {
+Future<void> fetchTransaction(String trxId, String userId) async {
+  try {
+    setState(() {
+      message = 'Mengambil data transaksi...';
+    });
+
+    final data = await TransactionService.fetchTransaction(
+      trxId,
+      userId,
+    );
+
+    final invoice = data['receipt']?['sale_uid'] ?? '';
+
+    if (!mounted) return;
+    setState(() {
+      message = 'Invoice $invoice berhasil dimuat';
+    });
+
+    // Ambil printer aktif atau default
+    PrinterModel? printer = selectedPrinter;
+    printer ??= await PrinterStorageService.getDefaultPrinter();
+
+    if (printer == null) {
+      if (!mounted) return;
+      setState(() {
+        message = 'Tidak ada printer yang dipilih';
+      });
+      return;
+    }
+
     try {
-      setState(() {
-        message = "Mengambil data transaksi...";
-      });
+      await BluetoothService.disconnect();
 
-      final url = 'https://k24.madapos.cloud/load-struk/$trxId/user/$userId';
+      final connected =
+          await BluetoothService.connect(printer.address);
 
-      final response = await http
-          .get(Uri.parse(url))
-          .timeout(const Duration(seconds: 20));
-
-      if (response.statusCode != 200) {
+      if (!connected) {
+        if (!mounted) return;
         setState(() {
-          message = "Gagal ambil data (${response.statusCode})";
+          message = 'Gagal connect printer';
         });
         return;
       }
 
-      final data = jsonDecode(response.body);
-
-      final storeName = data['store']?['name'] ?? '';
-      final invoice = data['receipt']?['sale_uid'] ?? '';
-      final total = data['receipt']?['grand_total'] ?? '';
-
-      debugPrint("Store: $storeName");
-      debugPrint("Invoice: $invoice");
-      debugPrint("Total: $total");
-
-      // =====================================================
-      // DEBUG CARTS
-      // carts bisa berupa List atau Map
-      // =====================================================
-      final carts = data['carts'];
-
-      // Jika carts adalah List (banyak item)
-      if (carts is List) {
-        for (final item in carts) {
-          final productName = item['product']?['name'] ?? '';
-          final qty = item['qty'] ?? 0;
-          final subtotal = item['sub_total'] ?? 0;
-
-          debugPrint("$productName x$qty = $subtotal");
-        }
-      }
-      // Jika carts adalah Map (hanya 1 item)
-      else if (carts is Map) {
-        carts.forEach((key, item) {
-          final productName = item['product']?['name'] ?? '';
-          final qty = item['qty'] ?? 0;
-          final subtotal = item['sub_total'] ?? 0;
-
-          debugPrint("$productName x$qty = $subtotal");
-        });
-      }
-
       if (!mounted) return;
       setState(() {
-        message = "Invoice $invoice berhasil dimuat";
+        selectedPrinter = printer;
+        connectedAddress = printer!.address;
+        isConnected = true;
+        message = 'Mencetak invoice...';
       });
 
-      // =========== Ambil data printer yang dipilih user atau default printer jika belum ada yang dipilih ===========
-      PrinterModel? printer = selectedPrinter;
-      printer ??= await PrinterStorageService.getDefaultPrinter();
-      // =========== End Ambil data printer yang dipilih user atau default printer jika belum ada yang dipilih ===========
+      await PrintService.printReceipt(data, printer);
 
-      if (printer == null) {
-        if (!mounted) return;
-        setState(() {
-          message = "Tidak ada printer yang dipilih";
-        });
-        return;
-      }
+      await BluetoothService.disconnect();
+      await AppBackground.minimize();
 
-      try {
-        // ===== Disconnect koneksi untuk mencegah koneksi masih aktif sebelumnya ======
-
-        await BluetoothService.disconnect();
-
-        // ===== End Disconnect koneksi untuk mencegah koneksi masih aktif sebelumnya ======
-
-        // ===== Connect koneksi Printer dengan address ======
-        final connected = await BluetoothService.connect(printer.address);
-        // ===== End Connect koneksi Printer dengan address ======
-
-        if (!connected) {
-          if (!mounted) return;
-          setState(() {
-            message = "Gagal connect printer";
-          });
-          return;
-        }
-
-        if (!mounted) return;
-        setState(() {
-          selectedPrinter = printer;
-          connectedAddress = printer!.address;
-          isConnected = true;
-          message = "Mencetak invoice...";
-        });
-
-        // Print struk
-        await PrintService.printReceipt(data, printer);
-
-        // Tunggu sebentar
-        // await Future.delayed(const Duration(milliseconds: 500));
-
-        // ===== Disconnect koneksi karena sudah selesai ======
-
-        await BluetoothService.disconnect();
-
-        // ===== End Disconnect koneksi karena sudah selesai ======
-
-        // ===== Minimize Aplikasi di Background ======
-        await AppBackground.minimize();
-        // ===== End Minimize Aplikasi di Background ======
-
-        if (!mounted) return;
-        setState(() {
-          isConnected = false;
-          message = "Print job selesai";
-        });
-      } catch (e) {
-        debugPrint("Print error: $e");
-
-        if (!mounted) return;
-        setState(() {
-          message = "Gagal mencetak";
-        });
-      }
-    } on TimeoutException {
       if (!mounted) return;
       setState(() {
-        message = "Timeout koneksi server";
+        isConnected = false;
+        message = 'Print job selesai';
       });
     } catch (e) {
-      debugPrint("Fetch transaction error: $e");
-
       if (!mounted) return;
       setState(() {
-        message = "Error: $e";
+        message = 'Gagal mencetak';
       });
     }
+  } on Exception catch (e) {
+    if (!mounted) return;
+    setState(() {
+      message = e.toString();
+    });
   }
+}
 
   @override
   void initState() {

@@ -36,6 +36,7 @@ dependencies:
   print_bluetooth_thermal: ^1.1.6
   app_links: ^6.4.0
   http: ^1.2.1
+  image: ^4.8.0
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
@@ -64,9 +65,7 @@ flutter:
   # the material Icons class.
   uses-material-design: true
   assets:
-    - assets/images/app-logo.png
-    - assets/images/footer.png
-    - assets/images/store-default.png
+    - assets/images/
 
   # To add assets to your application, add an assets section, like this:
   # assets:
