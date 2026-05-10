@@ -63,8 +63,6 @@ class PrintService {
       styles: const PosStyles(
         align: PosAlign.center,
         bold: true,
-        height: PosTextSize.size2,
-        width: PosTextSize.size2,
       ),
     );
 
@@ -406,6 +404,14 @@ class PrintService {
         bold: true,
       ),
     );
+    final ByteData dataFooter = await rootBundle.load('assets/images/footer.png');
+    final Uint8List bytesImageFooter = dataFooter.buffer.asUint8List();
+    final img.Image? imageFooter = img.decodeImage(bytesImageFooter);
+    if (imageFooter != null) {
+      final resizedFooter = img.copyResize(imageFooter, width: 200);
+      bytes += generator.image(resizedFooter, align: PosAlign.center);
+      bytes += generator.feed(1);
+    }
 
     bytes += generator.feed(1);
 

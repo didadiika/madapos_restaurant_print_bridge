@@ -11,6 +11,7 @@ import 'services/print_service.dart';
 import 'services/printer_storage_service.dart';
 import 'models/printer_model.dart';
 import 'constants/printer_connection.dart';
+import 'package:flutter/services.dart';
 
 void main() {
   runApp(const MyApp());
@@ -28,6 +29,19 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       home: PrintListenerPage(),
     );
+  }
+}
+
+class AppBackground {
+  static const MethodChannel _channel =
+      MethodChannel('madapos/background');
+
+  static Future<void> minimize() async {
+    try {
+      await _channel.invokeMethod('minimizeApp');
+    } catch (e) {
+      debugPrint('Gagal minimize app: $e');
+    }
   }
 }
 
@@ -347,7 +361,7 @@ Future<void> fetchTransaction(String trxId) async {
     });
 
     final url =
-        'https://irons-cafe.madapos.cloud/load-struk/$trxId/user/24b95afb-8455-4911-902a-dfd2c954d274';
+        'https://k24.madapos.cloud/load-struk/$trxId/user/24b95afb-8455-4911-902a-dfd2c954d274';
 
     final response = await http
         .get(Uri.parse(url))
@@ -452,6 +466,9 @@ Future<void> fetchTransaction(String trxId) async {
         await PrintBluetoothThermal.disconnect;
       } catch (_) {}
 
+      // Minimalkan aplikasi ke background tanpa menutup proses
+      await AppBackground.minimize();
+
       if (!mounted) return;
       setState(() {
         isConnected = false;
@@ -517,6 +534,14 @@ Future<void> fetchTransaction(String trxId) async {
     _linkSubscription = _appLinks.uriLinkStream.listen((Uri uri) {
       handleUri(uri);
     });
+  }
+
+  static Future<void> moveAppToBackground() async {
+  try {
+    await SystemChannels.platform.invokeMethod('SystemNavigator.pop', false);
+  } catch (e) {
+    debugPrint('Failed to move app to background: $e');
+  }
   }
 
   void handleUri(Uri uri) async {
