@@ -1,5 +1,4 @@
 class PrinterModel {
-
   final String name;
   final String connection;
   final String address;
@@ -17,9 +16,7 @@ class PrinterModel {
   });
 
   Map<String, dynamic> toJson() {
-
     return {
-
       'name': name,
       'connection': connection,
       'address': address,
@@ -27,15 +24,10 @@ class PrinterModel {
       'cash_drawer': cashDrawer,
       'auto_cut': autoCut,
     };
-
   }
 
-  factory PrinterModel.fromJson(
-    Map<String, dynamic> json,
-  ) {
-
+  factory PrinterModel.fromJson(Map<String, dynamic> json) {
     return PrinterModel(
-
       name: json['name'] ?? '',
       connection: json['connection'] ?? 'bluetooth',
       address: json['address'] ?? '',
@@ -43,6 +35,5 @@ class PrinterModel {
       cashDrawer: json['cash_drawer'] ?? false,
       autoCut: json['auto_cut'] ?? false,
     );
-
   }
 }
