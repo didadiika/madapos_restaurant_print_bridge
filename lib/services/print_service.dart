@@ -1,5 +1,5 @@
 import 'dart:typed_data';
-
+import 'dart:io';
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -15,7 +15,7 @@ class PrintService {
 
   static Future<void> printTest(PrinterModel printer) async {
     final bytes = await _buildTestBytes(printer);
-    await _sendToPrinter(bytes);
+    await _sendToPrinter(bytes, printer);
   }
 
   static Future<void> printReceipt(
@@ -23,7 +23,7 @@ class PrintService {
     PrinterModel printer,
   ) async {
     final bytes = await _buildReceiptBytes(data, printer);
-    await _sendToPrinter(bytes);
+    await _sendToPrinter(bytes, printer);
   }
 
   static Future<void> printOrder(
@@ -31,21 +31,44 @@ class PrintService {
     PrinterModel printer,
   ) async {
     final bytes = await _buildOrderBytes(data, printer);
-    await _sendToPrinter(bytes);
+    await _sendToPrinter(bytes, printer);
   }
 
   static Future<void> pushDrawer(PrinterModel printer) async {
     final bytes = await _buildDrawerBytes(printer);
-    await _sendToPrinter(bytes);
+    await _sendToPrinter(bytes, printer);
   }
 
   // =========================================================
   // CORE SEND METHOD
   // =========================================================
 
-  static Future<void> _sendToPrinter(List<int> bytes) async {
+  static Future<void> _sendToPrinter(
+    List<int> bytes,
+    PrinterModel printer,
+  ) async {
     try {
-      await PrintBluetoothThermal.writeBytes(bytes);
+      if (printer.connection == 'bluetooth') {
+        await PrintBluetoothThermal.writeBytes(bytes);
+        return;
+      }
+
+      if (printer.connection == 'network') {
+        final socket = await Socket.connect(
+          printer.address,
+          printer.port,
+          timeout: const Duration(seconds: 5),
+        );
+
+        socket.add(Uint8List.fromList(bytes));
+        await socket.flush();
+        await socket.close();
+        return;
+      }
+
+      throw Exception(
+        'Unsupported printer connection: ${printer.connection}',
+      );
     } catch (e) {
       debugPrint('Print error: $e');
       rethrow;

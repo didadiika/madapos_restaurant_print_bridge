@@ -1,3 +1,5 @@
+import '../constants/printer_connection.dart';
+
 class PrinterModel {
   final String name;
   final String connection;
@@ -5,6 +7,7 @@ class PrinterModel {
   final String paper;
   final bool cashDrawer;
   final bool autoCut;
+  final int port;
 
   PrinterModel({
     required this.name,
@@ -13,7 +16,12 @@ class PrinterModel {
     required this.paper,
     required this.cashDrawer,
     required this.autoCut,
+    this.port = 9100,
   });
+
+  bool get isBluetooth => connection == PrinterConnection.bluetooth;
+  bool get isNetwork => connection == PrinterConnection.network;
+  bool get isUsb => connection == PrinterConnection.usb;
 
   Map<String, dynamic> toJson() {
     return {
@@ -23,17 +31,20 @@ class PrinterModel {
       'paper': paper,
       'cash_drawer': cashDrawer,
       'auto_cut': autoCut,
+      'port': port,
     };
   }
 
   factory PrinterModel.fromJson(Map<String, dynamic> json) {
     return PrinterModel(
       name: json['name'] ?? '',
-      connection: json['connection'] ?? 'bluetooth',
+      connection:
+          json['connection'] ?? PrinterConnection.bluetooth,
       address: json['address'] ?? '',
       paper: json['paper'] ?? '80',
       cashDrawer: json['cash_drawer'] ?? false,
       autoCut: json['auto_cut'] ?? false,
+      port: json['port'] ?? 9100,
     );
   }
 }

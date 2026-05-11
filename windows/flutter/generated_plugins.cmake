@@ -4,6 +4,7 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   app_links
+  charset_converter
   permission_handler_windows
   print_bluetooth_thermal
 )

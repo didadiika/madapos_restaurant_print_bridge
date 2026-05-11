@@ -37,14 +37,19 @@ class PrinterStorageService {
 
   static Future<void> savePrinter(PrinterModel printer) async {
     final prefs = await SharedPreferences.getInstance();
+    final printers = await loadPrinters();
 
-    List<PrinterModel> printers = await loadPrinters();
-
-    // REMOVE DUPLICATE ADDRESS
-    printers.removeWhere((e) => e.address == printer.address);
+    printers.removeWhere(
+      (e) =>
+          e.connection == printer.connection &&
+          e.address == printer.address,
+    );
 
     printers.add(printer);
-    final json = jsonEncode(printers.map((e) => e.toJson()).toList());
+
+    final json = jsonEncode(
+      printers.map((e) => e.toJson()).toList(),
+    );
 
     await prefs.setString(printerKey, json);
   }
@@ -53,11 +58,19 @@ class PrinterStorageService {
   // FIND PRINTER
   // =========================
 
-  static Future<PrinterModel?> findPrinterByAddress(String address) async {
-    List<PrinterModel> printers = await loadPrinters();
+  static Future<PrinterModel?> findPrinterByAddress(
+    String connection,
+    String address,
+  ) async {
+    final printers = await loadPrinters();
+
     try {
-      return printers.firstWhere((e) => e.address == address);
-    } catch (e) {
+      return printers.firstWhere(
+        (e) =>
+            e.connection == connection &&
+            e.address == address,
+      );
+    } catch (_) {
       return null;
     }
   }
@@ -66,14 +79,23 @@ class PrinterStorageService {
   // REMOVE PRINTER
   // =========================
 
-  static Future<void> removePrinter(String address) async {
+  static Future<void> removePrinter(
+    String connection,
+    String address,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
 
-    List<PrinterModel> printers = await loadPrinters();
+    final printers = await loadPrinters();
 
-    printers.removeWhere((e) => e.address == address);
+    printers.removeWhere(
+      (e) =>
+          e.connection == connection &&
+          e.address == address,
+    );
 
-    final json = jsonEncode(printers.map((e) => e.toJson()).toList());
+    final json = jsonEncode(
+      printers.map((e) => e.toJson()).toList(),
+    );
 
     await prefs.setString(printerKey, json);
   }
