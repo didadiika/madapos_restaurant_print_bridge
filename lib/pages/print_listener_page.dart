@@ -559,184 +559,296 @@ Future<void> fetchTransaction(String trxId, String userId) async {
   final bool isBluetooth =
       printer.connection == PrinterConnection.bluetooth;
 
-  return Card(
-    elevation: 3,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(16),
+  return Dismissible(
+    key: Key(
+      '${printer.connection}_${printer.address}_${printer.port}',
     ),
-    child: ListTile(
-      leading: CircleAvatar(
-        child: Icon(
-          selected
-              ? Icons.check
-              : (isBluetooth
-                    ? Icons.bluetooth
-                    : Icons.lan),
-        ),
+    direction: DismissDirection.endToStart,
+
+    // Background merah saat swipe
+    background: Container(
+      alignment: Alignment.centerRight,
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      decoration: BoxDecoration(
+        color: Colors.red.shade600,
+        borderRadius: BorderRadius.circular(16),
       ),
-      title: Text(printer.name),
-      subtitle: Text(
-        isBluetooth
-            ? printer.address
-            : '${printer.address}:${printer.port}',
-      ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: const Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // TEST PRINT
-InkWell(
-  borderRadius: BorderRadius.circular(100),
-  onTap: () async {
-    try {
-      setState(() {
-        message = 'Mencetak test page...';
-      });
-
-      // ======================================================
-      // KHUSUS BLUETOOTH: connect manual terlebih dahulu
-      // ======================================================
-      if (printer.connection == PrinterConnection.bluetooth) {
-        await BluetoothService.disconnect();
-
-        final connected = await BluetoothService.connect(
-          printer.address,
-        );
-
-        if (!connected) {
-          if (!mounted) return;
-          setState(() {
-            message = 'Gagal connect printer Bluetooth';
-          });
-          return;
-        }
-
-        // Beri jeda agar koneksi stabil
-        await Future.delayed(
-          const Duration(milliseconds: 500),
-        );
-      }
-
-      // ======================================================
-      // CETAK TEST
-      // PrintService akan:
-      // - Bluetooth -> kirim ke plugin print_bluetooth_thermal
-      // - Network   -> socket TCP/IP ke IP:PORT
-      // ======================================================
-      await PrintService.printTest(
-        printer
-      );
-
-      // ======================================================
-      // KHUSUS BLUETOOTH: disconnect setelah print
-      // ======================================================
-      if (printer.connection == PrinterConnection.bluetooth) {
-        await Future.delayed(
-          const Duration(milliseconds: 500),
-        );
-        await BluetoothService.disconnect();
-      }
-
-      if (!mounted) return;
-      setState(() {
-        selectedPrinter = printer;
-        connectedAddress = printer.address;
-        isConnected = false;
-        message = 'Test print selesai';
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        message = 'Gagal test print: $e';
-      });
-    }
-  },
-  child: Container(
-    padding: const EdgeInsets.all(10),
-    decoration: BoxDecoration(
-      color: Colors.grey.shade100,
-      borderRadius: BorderRadius.circular(100),
-    ),
-    child: const Icon(
-      Icons.receipt_long,
-      size: 20,
-    ),
-  ),
-),
-          const SizedBox(width: 8),
-
-          // SETTING
-          InkWell(
-            borderRadius: BorderRadius.circular(100),
-            onTap: () async {
-              if (isBluetooth) {
-                final device = bluetoothDevices.firstWhere(
-                  (d) => d.macAdress == printer.address,
-                  orElse: () => BluetoothInfo(
-                    name: printer.name,
-                    macAdress: printer.address,
-                  ),
-                );
-
-                await showBluetoothPrinterDialog(
-                  device,
-                  existingPrinter: printer,
-                );
-              } else {
-                final updated =
-                    await showDialog<PrinterModel>(
-                  context: context,
-                  builder: (_) =>
-                      EthernetPrinterDialog(
-                    existingPrinter: printer,
-                  ),
-                );
-
-                if (updated != null) {
-                  await PrinterStorageService
-                      .savePrinter(updated);
-
-                  final printers =
-                      await PrinterStorageService
-                          .loadPrinters();
-
-                  if (!mounted) return;
-                  setState(() {
-                    savedPrinters = printers;
-
-                    if (selectedPrinter?.address ==
-                        printer.address) {
-                      selectedPrinter = updated;
-                    }
-
-                    message =
-                        'Printer ${updated.name} diperbarui';
-                  });
-                }
-              }
-            },
-            child: Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.orange.shade50,
-                borderRadius: BorderRadius.circular(100),
-              ),
-              child: Icon(
-                Icons.settings,
-                size: 20,
-                color: Colors.orange.shade700,
-              ),
+          Icon(
+            Icons.delete,
+            color: Colors.white,
+            size: 28,
+          ),
+          SizedBox(height: 4),
+          Text(
+            'Hapus',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
             ),
           ),
         ],
       ),
-      onTap: () {
-        setState(() {
-          selectedPrinter = printer;
-          connectedAddress = printer.address;
-          message =
-              'Printer ${printer.name} dipilih';
-        });
-      },
+    ),
+
+    // Konfirmasi sebelum delete
+    confirmDismiss: (direction) async {
+      return await showDialog<bool>(
+            context: context,
+            builder: (_) => AlertDialog(
+              title: const Text('Hapus Printer'),
+              content: Text(
+                'Yakin ingin menghapus printer "${printer.name}"?',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () =>
+                      Navigator.pop(context, false),
+                  child: const Text('Batal'),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: () =>
+                      Navigator.pop(context, true),
+                  child: const Text('Hapus'),
+                ),
+              ],
+            ),
+          ) ??
+          false;
+    },
+
+    // Aksi setelah delete
+    // Ganti bagian onDismissed menjadi seperti ini
+    onDismissed: (direction) async {
+      final deletedPrinter = printer;
+
+      // 1. Hapus langsung dari state agar item hilang dari UI
+      setState(() {
+        savedPrinters.removeWhere(
+          (p) =>
+              p.connection == deletedPrinter.connection &&
+              p.address == deletedPrinter.address,
+        );
+
+        // Jika printer yang dihapus sedang dipilih
+        if (selectedPrinter?.connection ==
+                deletedPrinter.connection &&
+            selectedPrinter?.address ==
+                deletedPrinter.address) {
+          selectedPrinter = null;
+          connectedAddress = null;
+        }
+
+        message = 'Printer ${deletedPrinter.name} dihapus';
+      });
+
+      // 2. Hapus dari SharedPreferences
+      await PrinterStorageService.removePrinter(
+        deletedPrinter.connection,
+        deletedPrinter.address,
+      );
+
+      // 3. Reload dari storage untuk sinkronisasi
+      final printers =
+          await PrinterStorageService.loadPrinters();
+      final defaultPrinter =
+          await PrinterStorageService.getDefaultPrinter();
+
+      if (!mounted) return;
+
+      setState(() {
+        savedPrinters = printers;
+        selectedPrinter ??= defaultPrinter;
+        connectedAddress = selectedPrinter?.address;
+      });
+    },
+
+    child: Card(
+      elevation: 3,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: ListTile(
+        leading: CircleAvatar(
+          child: Icon(
+            selected
+                ? Icons.check
+                : (isBluetooth
+                    ? Icons.bluetooth
+                    : Icons.lan),
+          ),
+        ),
+        title: Text(printer.name),
+        subtitle: Text(
+          isBluetooth
+              ? printer.address
+              : '${printer.address}:${printer.port}',
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // TEST PRINT
+            InkWell(
+              borderRadius: BorderRadius.circular(100),
+              onTap: () async {
+                try {
+                  setState(() {
+                    message = 'Mencetak test page...';
+                  });
+
+                  // BLUETOOTH harus connect dulu
+                  if (printer.connection ==
+                      PrinterConnection.bluetooth) {
+                    await BluetoothService.disconnect();
+
+                    final connected =
+                        await BluetoothService.connect(
+                      printer.address,
+                    );
+
+                    if (!connected) {
+                      if (!mounted) return;
+                      setState(() {
+                        message =
+                            'Gagal connect printer Bluetooth';
+                      });
+                      return;
+                    }
+
+                    await Future.delayed(
+                      const Duration(milliseconds: 500),
+                    );
+                  }
+
+                  // CETAK TEST
+                  await PrintService.printTest(
+                    printer,
+                  );
+
+                  // Disconnect Bluetooth setelah print
+                  if (printer.connection ==
+                      PrinterConnection.bluetooth) {
+                    await Future.delayed(
+                      const Duration(milliseconds: 500),
+                    );
+                    await BluetoothService.disconnect();
+                  }
+
+                  if (!mounted) return;
+                  setState(() {
+                    selectedPrinter = printer;
+                    connectedAddress = printer.address;
+                    isConnected = false;
+                    message = 'Test print selesai';
+                  });
+                } catch (e) {
+                  if (!mounted) return;
+                  setState(() {
+                    message = 'Gagal test print: $e';
+                  });
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius:
+                      BorderRadius.circular(100),
+                ),
+                child: const Icon(
+                  Icons.receipt_long,
+                  size: 20,
+                ),
+              ),
+            ),
+
+            const SizedBox(width: 8),
+
+            // SETTING
+            InkWell(
+              borderRadius: BorderRadius.circular(100),
+              onTap: () async {
+                if (isBluetooth) {
+                  final device =
+                      bluetoothDevices.firstWhere(
+                    (d) =>
+                        d.macAdress ==
+                        printer.address,
+                    orElse: () => BluetoothInfo(
+                      name: printer.name,
+                      macAdress: printer.address,
+                    ),
+                  );
+
+                  await showBluetoothPrinterDialog(
+                    device,
+                    existingPrinter: printer,
+                  );
+                } else {
+                  final updated =
+                      await showDialog<PrinterModel>(
+                    context: context,
+                    builder: (_) =>
+                        EthernetPrinterDialog(
+                      existingPrinter: printer,
+                    ),
+                  );
+
+                  if (updated != null) {
+                    await PrinterStorageService
+                        .savePrinter(updated);
+
+                    final printers =
+                        await PrinterStorageService
+                            .loadPrinters();
+
+                    if (!mounted) return;
+
+                    setState(() {
+                      savedPrinters = printers;
+
+                      if (selectedPrinter
+                              ?.address ==
+                          printer.address) {
+                        selectedPrinter = updated;
+                      }
+
+                      message =
+                          'Printer ${updated.name} diperbarui';
+                    });
+                  }
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius:
+                      BorderRadius.circular(100),
+                ),
+                child: Icon(
+                  Icons.settings,
+                  size: 20,
+                  color: Colors.orange.shade700,
+                ),
+              ),
+            ),
+          ],
+        ),
+        onTap: () {
+          setState(() {
+            selectedPrinter = printer;
+            connectedAddress = printer.address;
+            message = 'Printer ${printer.name} dipilih';
+          });
+        },
+      ),
     ),
   );
 }).toList(),
