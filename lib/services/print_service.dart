@@ -87,6 +87,12 @@ class PrintService {
     List<int> bytes = [];
 
     bytes += generator.reset();
+    // Beep printer (ESC/POS)
+    // ESC B m n
+    // m = jumlah beep
+    // n = durasi beep (50 ms × n)
+    bytes += [0x1B, 0x42, 0x04, 0x01];
+    // 4 kali beep, durasi masing-masing 100 ms
     bytes += generator.hr();
     bytes += generator.feed(1);
 
