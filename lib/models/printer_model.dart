@@ -8,6 +8,7 @@ class PrinterModel {
   final bool cashDrawer;
   final bool autoCut;
   final int port;
+  final bool beep;
 
   PrinterModel({
     required this.name,
@@ -16,6 +17,7 @@ class PrinterModel {
     required this.paper,
     required this.cashDrawer,
     required this.autoCut,
+    this.beep = false,
     this.port = 9100,
   });
 
@@ -32,6 +34,7 @@ class PrinterModel {
       'cash_drawer': cashDrawer,
       'auto_cut': autoCut,
       'port': port,
+      'beep': beep,
     };
   }
 
@@ -45,6 +48,7 @@ class PrinterModel {
       cashDrawer: json['cash_drawer'] ?? false,
       autoCut: json['auto_cut'] ?? false,
       port: json['port'] ?? 9100,
+      beep: json['beep'] ?? false,
     );
   }
 }

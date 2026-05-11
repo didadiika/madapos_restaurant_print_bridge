@@ -91,8 +91,11 @@ class PrintService {
     // ESC B m n
     // m = jumlah beep
     // n = durasi beep (50 ms × n)
-    bytes += [0x1B, 0x42, 0x04, 0x01];
+    if (printer.beep) {
+      bytes += _beep(times: 4, duration: 1);
+    }
     // 4 kali beep, durasi masing-masing 100 ms
+    bytes += generator.reset();
     bytes += generator.hr();
     bytes += generator.feed(1);
 
@@ -539,6 +542,13 @@ class PrintService {
     final profile = await CapabilityProfile.load();
 
     return Generator(paperSize, profile);
+  }
+
+  static List<int> _beep({
+    int times = 4,
+    int duration = 1,
+  }) {
+    return [0x1B, 0x42, times, duration];
   }
 
   static List<int> _finalize(

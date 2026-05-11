@@ -4,12 +4,12 @@ import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import '../constants/printer_connection.dart';
 import '../models/printer_model.dart';
 
-class PrinterSettingDialog extends StatefulWidget {
+class BluetoothPrinterDialog extends StatefulWidget {
   final BluetoothInfo device;
   final PrinterModel? existingPrinter;
   final Function(PrinterModel printer) onSave;
 
-  const PrinterSettingDialog({
+  const BluetoothPrinterDialog({
     super.key,
     required this.device,
     required this.onSave,
@@ -17,14 +17,15 @@ class PrinterSettingDialog extends StatefulWidget {
   });
 
   @override
-  State<PrinterSettingDialog> createState() => _PrinterSettingDialogState();
+  State<BluetoothPrinterDialog> createState() => _BluetoothPrinterDialogState();
 }
 
-class _PrinterSettingDialogState extends State<PrinterSettingDialog> {
+class _BluetoothPrinterDialogState extends State<BluetoothPrinterDialog> {
   late TextEditingController nameController;
   late String selectedPaper;
   late bool cashDrawer;
   late bool autoCut;
+  late bool beep;
 
   @override
   void initState() {
@@ -39,6 +40,7 @@ class _PrinterSettingDialogState extends State<PrinterSettingDialog> {
     selectedPaper = printer?.paper ?? '80';
     cashDrawer = printer?.cashDrawer ?? true;
     autoCut = printer?.autoCut ?? true;
+    beep = printer?.beep ?? false;
   }
 
   @override
@@ -57,6 +59,7 @@ class _PrinterSettingDialogState extends State<PrinterSettingDialog> {
       paper: selectedPaper,
       cashDrawer: cashDrawer,
       autoCut: autoCut,
+      beep: beep,
     );
 
     widget.onSave(printer);
@@ -127,6 +130,18 @@ class _PrinterSettingDialogState extends State<PrinterSettingDialog> {
               onChanged: (value) {
                 setState(() {
                   autoCut = value;
+                });
+              },
+            ),
+            SwitchListTile(
+              title: const Text('Beep'),
+              subtitle: const Text(
+                'Bunyikan buzzer setelah print selesai',
+              ),
+              value: beep,
+              onChanged: (value) {
+                setState(() {
+                  beep = value;
                 });
               },
             ),

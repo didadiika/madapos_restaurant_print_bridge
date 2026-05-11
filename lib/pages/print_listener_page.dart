@@ -11,9 +11,8 @@ import '../services/bluetooth_service.dart';
 import '../services/print_service.dart';
 import '../services/printer_storage_service.dart';
 import '../services/transaction_service.dart';
-import '../widgets/printer_setting_dialog.dart';
+import '../widgets/bluetooth_printer_dialog.dart';
 import '../widgets/base_url_setting_dialog.dart';
-
 import '../widgets/ethernet_printer_dialog.dart';
 import 'bluetooth_printer_page.dart';
 
@@ -55,13 +54,13 @@ class _PrintListenerPageState extends State<PrintListenerPage> {
   bool isConnected = false;
   bool isConnectingPrinter = false;
 
-  Future<void> showPrinterSettingDialog(
+  Future<void> showBluetoothPrinterDialog(
     BluetoothInfo device, {
     PrinterModel? existingPrinter,
   }) async {
     await showDialog(
       context: context,
-      builder: (_) => PrinterSettingDialog(
+      builder: (_) => BluetoothPrinterDialog(
         device: device,
         existingPrinter: existingPrinter,
         onSave: (printer) async {
@@ -519,7 +518,7 @@ Future<void> fetchTransaction(String trxId, String userId) async {
       trailing: InkWell(
         borderRadius: BorderRadius.circular(100),
         onTap: () async {
-          await showPrinterSettingDialog(device);
+          await showBluetoothPrinterDialog(device);
         },
         child: Container(
           padding: const EdgeInsets.symmetric(
@@ -678,7 +677,7 @@ InkWell(
                   ),
                 );
 
-                await showPrinterSettingDialog(
+                await showBluetoothPrinterDialog(
                   device,
                   existingPrinter: printer,
                 );
