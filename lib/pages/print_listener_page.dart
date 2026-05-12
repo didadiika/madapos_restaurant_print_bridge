@@ -268,7 +268,14 @@ class _PrintListenerPageState extends State<PrintListenerPage> {
   // FETCH TRANSACTION
   // =========================
 
-Future<void> fetchTransaction(String trxId, String userId) async {
+Future<void> fetchTransaction(
+  String trxId,
+  String userId, {
+  String? receipt,
+  String? order,
+  String? bill,
+  String? pushDrawer,
+}) async {
   try {
     setState(() {
       message = 'Mengambil data transaksi...';
@@ -277,71 +284,223 @@ Future<void> fetchTransaction(String trxId, String userId) async {
     final data = await TransactionService.fetchTransaction(
       trxId,
       userId,
+      receipt: receipt,
+      order: order,
+      bill: bill,
+      pushDrawer: pushDrawer,
     );
 
-    final invoice = data['receipt']?['sale_uid'] ?? '';
+    print('Data transaction berhasil diterima');
 
-    if (!mounted) return;
+    await handlePrintData(data);
+
     setState(() {
-      message = 'Invoice $invoice berhasil dimuat';
+      message = 'Selesai';
     });
+  } catch (e) {
+    print('Fetch transaction error: $e');
 
-    // Ambil printer aktif atau default
-    PrinterModel? printer = selectedPrinter;
-    printer ??= await PrinterStorageService.getDefaultPrinter();
-
-    if (printer == null) {
-      if (!mounted) return;
-      setState(() {
-        message = 'Tidak ada printer yang dipilih';
-      });
-      return;
-    }
-
-    try {
-      await BluetoothService.disconnect();
-
-      final connected =
-          await BluetoothService.connect(printer.address);
-
-      if (!connected) {
-        if (!mounted) return;
-        setState(() {
-          message = 'Gagal connect printer';
-        });
-        return;
-      }
-
-      if (!mounted) return;
-      setState(() {
-        selectedPrinter = printer;
-        connectedAddress = printer!.address;
-        isConnected = true;
-        message = 'Mencetak invoice...';
-      });
-
-      await PrintService.printReceipt(data, printer);
-
-      await BluetoothService.disconnect();
-      await AppBackground.minimize();
-
-      if (!mounted) return;
-      setState(() {
-        isConnected = false;
-        message = 'Print job selesai';
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        message = 'Gagal mencetak';
-      });
-    }
-  } on Exception catch (e) {
-    if (!mounted) return;
     setState(() {
-      message = e.toString();
+      message = 'Error: $e';
     });
   }
+}
+
+Future<void> handlePrintData(Map<String, dynamic> root) async {
+  final waiting = root['waiting'] ?? {};
+
+  // API mengirim string "1", bukan integer 1
+  final bool doReceipt = waiting['receipt']?.toString() == '1';
+  final bool doOrder = waiting['order']?.toString() == '1';
+  final bool doBill = waiting['bill']?.toString() == '1';
+  final bool doPushDrawer =
+      waiting['push_drawer']?.toString() == '1';
+
+  debugPrint('========== WAITING FLAGS ==========');
+  debugPrint('doReceipt    : $doReceipt');
+  debugPrint('doOrder      : $doOrder');
+  debugPrint('doBill       : $doBill');
+  debugPrint('doPushDrawer : $doPushDrawer');
+
+  if (!doReceipt && !doOrder && !doBill && !doPushDrawer) {
+    debugPrint('Tidak ada job yang harus diproses.');
+    return;
+  }
+
+  final List printers = root['printers'] ?? [];
+
+  debugPrint('Jumlah printer dari API: ${printers.length}');
+
+  if (printers.isEmpty) {
+    debugPrint('Daftar printer kosong.');
+    return;
+  }
+
+  for (final printerJson in printers) {
+    final printer = PrinterModel.fromJson(printerJson);
+
+    debugPrint('\n========== PRINTER ==========');
+    debugPrint('Nama       : ${printer.name}');
+    debugPrint('Connection : ${printer.connection}');
+    debugPrint('Address    : ${printer.address}');
+    debugPrint('Paper      : ${printer.paper}');
+    debugPrint('CashDrawer : ${printer.cashDrawer}');
+    debugPrint('AutoCut    : ${printer.autoCut}');
+    debugPrint('Jobs Count : ${printer.jobs.length}');
+
+    for (final job in printer.jobs) {
+      final String jobName =
+          job.job.toString().trim().toLowerCase();
+
+      debugPrint('\n---------- JOB ----------');
+      debugPrint('Job Name   : ${job.job}');
+      debugPrint('Normalized : $jobName');
+      debugPrint('Autoprint  : ${job.autoprint}');
+      debugPrint('Quantity   : ${job.autoprintQuantity}');
+
+      if (job.autoprint != 1) {
+        debugPrint('Skip: autoprint != 1');
+        continue;
+      }
+
+      bool shouldExecute = false;
+
+      switch (jobName) {
+        case 'receipt':
+          shouldExecute = doReceipt;
+          break;
+        case 'order':
+          shouldExecute = doOrder;
+          break;
+        case 'bill':
+          shouldExecute = doBill;
+          break;
+        case 'push drawer':
+        case 'push_drawer':
+          shouldExecute = doPushDrawer;
+          break;
+      }
+
+      debugPrint('Should Execute: $shouldExecute');
+
+      if (!shouldExecute) {
+        debugPrint('Skip: job tidak aktif.');
+        continue;
+      }
+
+      List<int> bytes = [];
+
+      try {
+        // ==========================================
+        // GENERATE BYTES
+        // ==========================================
+        debugPrint('Generating bytes untuk $jobName...');
+
+        if (jobName == 'receipt') {
+          bytes = await PrintService.generateReceipt(
+            root,
+            printer,
+          );
+        } else if (jobName == 'order') {
+          bytes = await PrintService.generateOrder(
+            root,
+            printer,
+          );
+        }
+
+        debugPrint('Bytes generated: ${bytes.length} bytes');
+
+        if (jobName != 'push drawer' && bytes.isEmpty) {
+          debugPrint('Skip: bytes kosong.');
+          continue;
+        }
+
+        // ==========================================
+        // CONNECT PRINTER
+        // ==========================================
+        if (mounted) {
+          setState(() {
+            message =
+                'Mencetak ${job.job} ke ${printer.name}...';
+          });
+        }
+
+        debugPrint('Connecting to printer...');
+        await PrintService.connect(printer);
+        debugPrint('Connected to printer.');
+
+        // Sangat penting: beri waktu printer Bluetooth siap menerima data
+        await Future.delayed(
+          const Duration(milliseconds: 200),
+        );
+
+        // ==========================================
+        // EXECUTE JOB
+        // ==========================================
+        if (jobName == 'push drawer' ||
+            jobName == 'push_drawer') {
+          // debugPrint('Opening cash drawer...');
+          // await PrintService.openCashDrawer();
+          // debugPrint('Cash drawer opened.');
+        } else {
+          debugPrint('Writing bytes to printer...');
+          await PrintService.write(bytes);
+          debugPrint('Write completed.');
+
+          // Print tambahan jika quantity > 1
+          for (
+            int i = 1;
+            i < job.autoprintQuantity;
+            i++
+          ) {
+            debugPrint(
+              'Printing copy ${i + 1}/${job.autoprintQuantity}',
+            );
+            await Future.delayed(
+              const Duration(milliseconds: 200),
+            );
+            await PrintService.write(bytes);
+          }
+
+          // Cash drawer otomatis
+          // if (printer.cashDrawer) {
+          //   debugPrint('Opening cash drawer...');
+          //   await PrintService.openCashDrawer();
+          //   debugPrint('Cash drawer opened.');
+          // }
+        }
+
+        debugPrint(
+          'SUCCESS: ${job.job} berhasil dicetak ke ${printer.name}',
+        );
+      } catch (e, stackTrace) {
+        debugPrint(
+          'ERROR: Gagal print ${job.job} ke ${printer.name}',
+        );
+        debugPrint('Exception: $e');
+        debugPrint('StackTrace: $stackTrace');
+      } finally {
+        // Tunggu printer benar-benar selesai mencetak
+        await Future.delayed(const Duration(milliseconds: 200));
+
+        debugPrint('Disconnecting printer...');
+        await PrintService.disconnect();
+        debugPrint('Printer disconnected.');
+
+        // Tunggu socket Bluetooth benar-benar release
+        //await Future.delayed(const Duration(seconds: 1));
+        await AppBackground.minimize();
+      }
+    }
+  }
+
+  if (mounted) {
+    setState(() {
+      message = 'Selesai';
+    });
+  }
+
+  debugPrint('========== PRINTING FINISHED ==========');
 }
 
   @override
@@ -383,19 +542,46 @@ Future<void> fetchTransaction(String trxId, String userId) async {
     });
   }
 
-  void handleUri(Uri uri) async {
-    // Ambil parameter dari deep link, misalnya: madapos://print?id=12345
-    final trxId = uri.queryParameters['id'];
-    final userId = uri.queryParameters['userId'];
-
-    setState(() {
-      message = "Loading transaksi...";
-    });
-
-    if (trxId != null && userId != null) {
-      await fetchTransaction(trxId, userId);
-    }
+void handleUri(Uri uri) async {
+  String? normalize(String? value) {
+    if (value == null) return null;
+    if (value.toLowerCase() == 'null') return null;
+    if (value.isEmpty) return null;
+    return value;
   }
+
+  final trxId = uri.queryParameters['id'];
+  final userId = uri.queryParameters['userId'];
+
+  final receipt = normalize(uri.queryParameters['receipt']);
+  final order = normalize(uri.queryParameters['order']);
+  final bill = normalize(uri.queryParameters['bill']);
+  final pushDrawer = normalize(
+    uri.queryParameters['push_drawer'],
+  );
+
+  print('Deep Link: $uri');
+  print('receipt = $receipt');
+  print('order = $order');
+  print('bill = $bill');
+  print('pushDrawer = $pushDrawer');
+
+  if (!mounted) return;
+  setState(() {
+    message = 'Loading transaksi...';
+  });
+
+  if (trxId != null && userId != null) {
+    await fetchTransaction(
+      trxId,
+      userId,
+      receipt: receipt,
+      order: order,
+      bill: bill,
+      pushDrawer: pushDrawer,
+    );
+  }
+}
 
   @override
   void dispose() {
@@ -722,7 +908,7 @@ Future<void> fetchTransaction(String trxId, String userId) async {
                     }
 
                     await Future.delayed(
-                      const Duration(milliseconds: 500),
+                      const Duration(milliseconds: 200),
                     );
                   }
 
@@ -735,7 +921,7 @@ Future<void> fetchTransaction(String trxId, String userId) async {
                   if (printer.connection ==
                       PrinterConnection.bluetooth) {
                     await Future.delayed(
-                      const Duration(milliseconds: 500),
+                      const Duration(milliseconds: 200),
                     );
                     await BluetoothService.disconnect();
                   }

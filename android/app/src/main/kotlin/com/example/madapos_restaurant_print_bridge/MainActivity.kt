@@ -1,4 +1,4 @@
-package com.example.madapos_restaurant_print_bridge
+package com.madapos_restaurant_print_bridge
 
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine

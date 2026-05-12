@@ -228,8 +228,8 @@ class PrintService {
         styles: const PosStyles(
           align: PosAlign.center,
           bold: true,
-          height: PosTextSize.size3,
-          width: PosTextSize.size3,
+          height: PosTextSize.size2,
+          width: PosTextSize.size2,
         ),
       );
 
@@ -480,41 +480,256 @@ class PrintService {
     return bytes;
   }
 
-  static Future<List<int>> _buildOrderBytes(
-    dynamic data,
-    PrinterModel printer,
-  ) async {
-    // Sementara gunakan layout sederhana.
-    // Nanti bisa Anda sesuaikan untuk kitchen order.
-    final generator = await _createGenerator(printer);
+static Future<List<int>> _buildOrderBytes(
+  dynamic data,
+  PrinterModel printer,
+) async {
+  final generator = await _createGenerator(printer);
 
-    List<int> bytes = [];
+  List<int> bytes = [];
+  bytes += generator.reset();
+  
+  String safe(dynamic value) => value?.toString() ?? '';
 
+  // Helper format tanggal:
+  // 2026-05-10T03:19:22.000000Z -> 2026-05-10 03:19:22
+  // 2026-05-10 10:19:22 -> tetap
+  String formatDateTime(String value) {
+    if (value.isEmpty) return '';
+
+    try {
+      final dt = DateTime.parse(value).toLocal();
+
+      String two(int n) => n.toString().padLeft(2, '0');
+
+      return '${dt.year}-'
+          '${two(dt.month)}-'
+          '${two(dt.day)} '
+          '${two(dt.hour)}:'
+          '${two(dt.minute)}:'
+          '${two(dt.second)}';
+    } catch (_) {
+      return value;
+    }
+  }
+
+  final receipt = data['receipt'] ?? {};
+  final waiting = data['waiting'] ?? {};
+  final desks = data['desks'] ?? {};
+  final store = data['store'] ?? {};
+
+  // Nama outlet dari store.name
+  final outletName = safe(
+    store['name'] ??
+        receipt['company'] ??
+        receipt['outlet_name'] ??
+        'MadaPOS',
+  );
+
+  // Nomor antrian (jika ada)
+  final queueNumber = safe(
+    waiting['queue'] ??
+        waiting['queue_number'] ??
+        waiting['number'],
+  );
+
+  // Tipe dine-in / take away
+  final dineType = safe(receipt['dine_type']).toLowerCase();
+
+  // Apakah take away?
+  final isTakeAway =
+      dineType == 'take away' ||
+      dineType == 'takeaway' ||
+      receipt['dine_uid']?.toString().toUpperCase() == 'TA';
+
+  // Nomor meja
+  final deskNumber = safe(
+    desks['numb_desk'] ??
+        desks['desk_number'],
+  );
+
+  // Nama area / lantai
+  final areaName = isTakeAway
+      ? '#Take Away'
+      : safe(
+          desks['area'] ??
+              desks['floor'] ??
+              desks['floor_name'] ??
+              desks['name_floor'],
+        );
+
+  // Tanggal
+  final createdAt = formatDateTime(
+    safe(
+      receipt['date'] ??
+          receipt['created_at'] ??
+          receipt['datetime'],
+    ),
+  );
+
+  // Nama pelanggan
+  final customerName = safe(
+    receipt['customer_name'],
+  );
+
+  // Nama kasir/waiter
+  final cashier = safe(
+    receipt['cashier']?['name'] ??
+        receipt['created_name'] ??
+        receipt['cashier_name'] ??
+        receipt['user_name'],
+  );
+
+  // =========================
+  // LOOP PER KATEGORI
+  // =========================
+  for (final category in printer.orderPerCategory) {
+    final orders = category.orders;
+    if (orders.isEmpty) continue;
+
+    // Nama kategori kiri atas
     bytes += generator.text(
-      'ORDER DAPUR',
+      '#${category.categoryName}',
+      styles: const PosStyles(
+        bold: true,
+        align: PosAlign.left,
+      ),
+    );
+
+    // Nama outlet (di atas nomor meja)
+    bytes += generator.text(
+      outletName,
       styles: const PosStyles(
         align: PosAlign.center,
+      ),
+    );
+
+    // Nomor meja (#3)
+    if (deskNumber.isNotEmpty) {
+      bytes += generator.text(
+        '#$deskNumber',
+        styles: const PosStyles(
+          align: PosAlign.center,
+          bold: true,
+          height: PosTextSize.size3,
+          width: PosTextSize.size3,
+        ),
+      );
+    }
+
+    // Nama area / lantai (di bawah nomor meja)
+    if (areaName.isNotEmpty) {
+      bytes += generator.text(
+        areaName,
+        styles: const PosStyles(
+          align: PosAlign.center,
+          bold: true,
+          height: PosTextSize.size2,
+          width: PosTextSize.size2,
+        ),
+      );
+    }
+
+    bytes += generator.hr(ch: '=');
+
+    // Tanggal
+    if (createdAt.isNotEmpty) {
+      bytes += generator.text('Tanggal : $createdAt');
+    }
+
+    // Nama pelanggan (di bawah tanggal)
+    if (customerName.isNotEmpty) {
+      bytes += generator.text(
+        customerName.toUpperCase(),
+        styles: const PosStyles(
+          align: PosAlign.center,
+          bold: true,
+          height: PosTextSize.size2,
+          width: PosTextSize.size2,
+        ),
+      );
+    }
+
+    // Jika customer kosong, fallback ke nama kasir
+    else if (cashier.isNotEmpty) {
+      bytes += generator.text(
+        cashier.toUpperCase(),
+        styles: const PosStyles(
+          align: PosAlign.center,
+          bold: true,
+          height: PosTextSize.size2,
+          width: PosTextSize.size2,
+        ),
+      );
+    }
+
+    bytes += generator.hr();
+
+    // Header item
+    bytes += generator.text(
+      'Qty Item',
+      styles: const PosStyles(
         bold: true,
-        height: PosTextSize.size2,
-        width: PosTextSize.size2,
       ),
     );
 
     bytes += generator.hr();
 
-    final items = data['items'] as List? ?? [];
-    for (final item in items) {
+    // =========================
+    // DETAIL ITEM
+    // =========================
+    int totalItems = 0;
+
+    for (final order in orders) {
+      totalItems++;
+
+      // Contoh: 2 Chicken Wings
       bytes += generator.text(
-        '${item['qty']}x ${item['name']}',
-        styles: const PosStyles(bold: true),
+        '${order.qty} ${order.productName}',
+        styles: const PosStyles(
+          bold: true,
+        ),
       );
+
+      // Catatan
+      if (order.note.trim().isNotEmpty) {
+        bytes += generator.text(
+          '   **${order.note}',
+        );
+      }
     }
 
-    bytes += generator.feed(3);
-    bytes += _finalize(generator, printer);
+    bytes += generator.hr();
 
-    return bytes;
+    // Total item
+    bytes += generator.text(
+      '$totalItems ITEM(S)',
+      styles: const PosStyles(
+        bold: true,
+      ),
+    );
+
+    bytes += generator.hr(ch: '=');
+
+    // Footer
+    bytes += generator.text(
+      'Powered by MadaPOS',
+      styles: const PosStyles(
+        align: PosAlign.center,
+        bold: true,
+      ),
+    );
+
+    bytes += generator.feed(3);
+    bytes += _beep(times: 4, duration: 1);
+    
+
+    // Cut per kategori
+    bytes += _finalize(generator, printer);
   }
+
+  return bytes;
+}
 
   static Future<List<int>> _buildDrawerBytes(
     PrinterModel printer,
@@ -522,10 +737,139 @@ class PrintService {
     final generator = await _createGenerator(printer);
 
     List<int> bytes = [];
+    bytes += generator.reset();
     bytes += generator.drawer();
 
     return bytes;
   }
+
+// =========================================================
+// GENERATOR METHODS
+// Tambahkan di dalam class PrintService,
+// tepat di bawah PUBLIC METHODS.
+// =========================================================
+  static Future<List<int>> generateReceipt(
+    dynamic data,
+    PrinterModel printer,
+    ) async {
+      return await _buildReceiptBytes(data, printer);
+  }
+
+  static Future<List<int>> generateOrder(
+    dynamic data,
+    PrinterModel printer,
+  ) async {
+    return await _buildOrderBytes(data, printer);
+  }
+
+  // =========================================================
+// CONNECTION METHODS
+// Tambahkan juga agar handlePrintData() dapat memanggil:
+// - PrintService.connect()
+// - PrintService.write()
+// - PrintService.disconnect()
+// - PrintService.openCashDrawer()
+// =========================================================
+
+static Socket? _socket;
+static PrinterModel? _currentPrinter;
+
+/// Untuk Bluetooth tidak perlu melakukan apa-apa,
+/// karena koneksi sudah dibuka sebelumnya menggunakan
+/// BluetoothService.connect().
+///
+/// Untuk Ethernet kita buka socket dan simpan ke _socket.
+static Future<void> connect(PrinterModel printer) async {
+  _currentPrinter = printer;
+
+  if (printer.connection == 'bluetooth') {
+    // Putuskan koneksi lama terlebih dahulu
+    try {
+      await PrintBluetoothThermal.disconnect;
+    } catch (_) {}
+
+    final connected =
+        await PrintBluetoothThermal.connect(
+      macPrinterAddress: printer.address,
+    );
+
+    if (connected != true) {
+      throw Exception(
+        'Gagal connect Bluetooth ke ${printer.address}',
+      );
+    }
+
+    // Beri jeda agar printer siap menerima data
+    await Future.delayed(
+      const Duration(milliseconds: 500),
+    );
+
+    return;
+  }
+
+  if (printer.connection == 'network') {
+    _socket = await Socket.connect(
+      printer.address,
+      printer.port,
+      timeout: const Duration(seconds: 5),
+    );
+    return;
+  }
+
+  throw Exception(
+    'Unsupported printer connection: ${printer.connection}',
+  );
+}
+
+/// Menulis bytes ke printer yang sedang aktif.
+static Future<void> write(List<int> bytes) async {
+  if (_currentPrinter == null) {
+    throw Exception('Printer belum terkoneksi.');
+  }
+
+  if (_currentPrinter!.connection == 'bluetooth') {
+    await PrintBluetoothThermal.writeBytes(bytes);
+    return;
+  }
+
+  if (_currentPrinter!.connection == 'network') {
+    if (_socket == null) {
+      throw Exception('Socket network belum terbuka.');
+    }
+
+    _socket!.add(Uint8List.fromList(bytes));
+    await _socket!.flush();
+    return;
+  }
+}
+
+  /// Membuka cash drawer.
+static Future<void> openCashDrawer() async {
+  if (_currentPrinter == null) return;
+
+  final generator = await _createGenerator(_currentPrinter!);
+  final bytes = generator.drawer();
+
+  await write(bytes);
+}
+
+  /// Menutup koneksi network.
+  /// Untuk Bluetooth tidak perlu karena handlePrintData()
+  /// memanggil disconnect() setelah setiap printer.
+static Future<void> disconnect() async {
+  if (_currentPrinter?.connection == 'network') {
+    if (_socket != null) {
+      await _socket!.close();
+      _socket = null;
+    }
+  } else if (_currentPrinter?.connection == 'bluetooth') {
+    try {
+      await PrintBluetoothThermal.disconnect;
+    } catch (_) {}
+  }
+
+  _currentPrinter = null;
+}
 
   // =========================================================
   // HELPERS
@@ -556,6 +900,7 @@ class PrintService {
     PrinterModel printer,
   ) {
     List<int> bytes = [];
+    bytes += generator.reset();
 
     if (printer.autoCut) {
       bytes += generator.cut();
