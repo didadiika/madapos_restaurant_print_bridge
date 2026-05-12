@@ -1,14 +1,52 @@
 import 'dart:typed_data';
 import 'dart:io';
+import 'dart:convert';
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
+import 'package:http/http.dart' as http;
 
 import '../models/printer_model.dart';
 
 class PrintService {
+
+  // =========================================================
+  // LOAD IMAGE FROM URL (store.photo_link)
+  // =========================================================
+  static Future<img.Image?> _loadNetworkImage(
+    String url, {
+    int? width,
+  }) async {
+    try {
+      final response = await http.get(Uri.parse(url));
+
+      if (response.statusCode != 200) {
+        debugPrint('Gagal download logo: ${response.statusCode}');
+        return null;
+      }
+
+      final Uint8List bytes = response.bodyBytes;
+      img.Image? image = img.decodeImage(bytes);
+
+      if (image == null) {
+        debugPrint('Gagal decode logo');
+        return null;
+      }
+
+      // Resize agar ukuran logo sesuai
+      if (width != null) {
+        image = img.copyResize(image, width: width);
+      }
+
+      return image;
+    } catch (e) {
+      debugPrint('Error load network image: $e');
+      return null;
+    }
+  }
+
   // =========================================================
   // PUBLIC METHODS
   // =========================================================
@@ -155,7 +193,7 @@ class PrintService {
     final generator = await _createGenerator(printer);
 
     List<int> bytes = [];
-
+    bytes += generator.reset();
     // =========================================================
     // HELPERS
     // =========================================================
@@ -185,6 +223,27 @@ class PrintService {
     final carts = data['carts'] ?? {};
     final printSetting = data['print_setting'] ?? {};
     final cashier = receipt['cashier'] ?? {};
+
+    // =========================================================
+    // LOGO TOKO DARI API (store.photo_link)
+    // =========================================================
+    final photoLink = safe(store['photo_link']);
+
+    if (photoLink.isNotEmpty) {
+      final logo = await _loadNetworkImage(
+        photoLink,
+        width: 215,
+      );
+
+      if (logo != null) {
+        bytes += generator.image(
+          logo,
+          align: PosAlign.center,
+        );
+
+        bytes += generator.emptyLines(1);
+      }
+    }
 
     // =========================================================
     // HEADER TOKO
@@ -269,11 +328,34 @@ class PrintService {
 
     if (saleUid.isNotEmpty) {
       try {
+        // Jika jumlah digit ganjil, tambahkan 0 di depan
+        final barcodeValue =
+            saleUid.length.isOdd ? '0$saleUid' : saleUid;
+
+        // Prefix {C = Code Set C (khusus angka)
+        final code128Data = '{C$barcodeValue';
+
+        bytes += generator.setStyles(
+          const PosStyles(align: PosAlign.center),
+        );
+
         bytes += generator.barcode(
-          Barcode.code128(saleUid.codeUnits),
+          Barcode.code128(
+            utf8.encode(code128Data), // List<int>
+          ),
           width: 2,
           height: 60,
           font: BarcodeFont.fontA,
+          textPos: BarcodeText.none,
+        );
+
+        // Cetak teks asli di bawah barcode
+        bytes += generator.text(
+          saleUid,
+          styles: const PosStyles(
+            align: PosAlign.center,
+            bold: true,
+          ),
         );
       } catch (e) {
         debugPrint('Barcode error: $e');
@@ -721,8 +803,9 @@ static Future<List<int>> _buildOrderBytes(
     );
 
     bytes += generator.feed(3);
-    bytes += _beep(times: 4, duration: 1);
-    
+    if (printer.beep) {
+      bytes += _beep(times: 4, duration: 1);
+    }
 
     // Cut per kategori
     bytes += _finalize(generator, printer);
@@ -798,11 +881,6 @@ static Future<void> connect(PrinterModel printer) async {
         'Gagal connect Bluetooth ke ${printer.address}',
       );
     }
-
-    // Beri jeda agar printer siap menerima data
-    await Future.delayed(
-      const Duration(milliseconds: 500),
-    );
 
     return;
   }

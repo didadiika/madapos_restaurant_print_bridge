@@ -431,7 +431,7 @@ Future<void> handlePrintData(Map<String, dynamic> root) async {
 
         // Sangat penting: beri waktu printer Bluetooth siap menerima data
         await Future.delayed(
-          const Duration(milliseconds: 200),
+          const Duration(milliseconds: 500),
         );
 
         // ==========================================
@@ -457,7 +457,7 @@ Future<void> handlePrintData(Map<String, dynamic> root) async {
               'Printing copy ${i + 1}/${job.autoprintQuantity}',
             );
             await Future.delayed(
-              const Duration(milliseconds: 200),
+              const Duration(milliseconds: 500),
             );
             await PrintService.write(bytes);
           }
@@ -481,7 +481,7 @@ Future<void> handlePrintData(Map<String, dynamic> root) async {
         debugPrint('StackTrace: $stackTrace');
       } finally {
         // Tunggu printer benar-benar selesai mencetak
-        await Future.delayed(const Duration(milliseconds: 200));
+        await Future.delayed(const Duration(milliseconds: 500));
 
         debugPrint('Disconnecting printer...');
         await PrintService.disconnect();
@@ -908,7 +908,7 @@ void handleUri(Uri uri) async {
                     }
 
                     await Future.delayed(
-                      const Duration(milliseconds: 200),
+                      const Duration(milliseconds: 500),
                     );
                   }
 
@@ -921,7 +921,7 @@ void handleUri(Uri uri) async {
                   if (printer.connection ==
                       PrinterConnection.bluetooth) {
                     await Future.delayed(
-                      const Duration(milliseconds: 200),
+                      const Duration(milliseconds: 500),
                     );
                     await BluetoothService.disconnect();
                   }

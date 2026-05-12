@@ -120,7 +120,9 @@ class PrinterModel {
 
       // Local storage
       autoCut: parseBool(
-        json['auto_cut'] ?? true,
+        json['auto_cut'] ??
+            json['printer_auto_cut'] ??
+            false,
       ),
 
       // API biasanya tidak mengirim port
@@ -129,7 +131,7 @@ class PrinterModel {
           ) ??
           9100,
 
-      beep: parseBool(json['beep'] ?? false),
+      beep: parseBool(json['beep'] ?? json['printer_beep'] ?? false),
 
       // Parse jobs[]
       jobs: (json['jobs'] as List? ?? [])
