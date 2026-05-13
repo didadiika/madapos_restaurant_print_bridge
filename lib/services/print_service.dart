@@ -609,13 +609,6 @@ static Future<List<int>> _buildOrderBytes(
         'MadaPOS',
   );
 
-  // Nomor antrian (jika ada)
-  final queueNumber = safe(
-    waiting['queue'] ??
-        waiting['queue_number'] ??
-        waiting['number'],
-  );
-
   // Tipe dine-in / take away
   final dineType = safe(receipt['dine_type']).toLowerCase();
 

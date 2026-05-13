@@ -358,7 +358,10 @@ Future<void> handlePrintData(Map<String, dynamic> root) async {
       debugPrint('Autoprint  : ${job.autoprint}');
       debugPrint('Quantity   : ${job.autoprintQuantity}');
 
-      if (job.autoprint != 1) {
+      final bool isManualRequest =
+      doReceipt || doOrder || doBill || doPushDrawer;
+
+      if (!isManualRequest && job.autoprint != 1) {
         debugPrint('Skip: autoprint != 1');
         continue;
       }
