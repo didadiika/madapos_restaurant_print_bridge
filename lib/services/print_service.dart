@@ -453,17 +453,48 @@ class PrintService {
     // =========================================================
     // SUMMARY
     // =========================================================
-    final disc = receipt['disc_number'] ?? 0;
-    final total = receipt['grand_total'] ?? 0;
-    final paid = receipt['paid'] ?? data['paid'] ?? 0;
-    final changed = receipt['changed'] ?? 0;
+    double toDouble(dynamic value) =>
+        double.tryParse(value?.toString() ?? '0') ?? 0;
+
+    // Data dasar
+    final totalBeforeDisc = toDouble(receipt['total_before_disc']);
+    final discNumber = toDouble(receipt['disc_number']);
+    final discPercent = toDouble(receipt['disc_percent']);
+    final totalAfterDisc = toDouble(receipt['total_after_disc']);
+    final taxVat = toDouble(receipt['tax_vat']);
+    final grandTotal = toDouble(receipt['grand_total']);
+    final paid = toDouble(receipt['paid'] ?? data['paid']);
+    final changed = toDouble(receipt['changed']);
     final payment = safe(data['payments']);
 
-    if ((double.tryParse(disc.toString()) ?? 0) > 0) {
+    // =========================================================
+    // DISKON
+    // =========================================================
+    // Diskon bisa berupa nominal atau persen.
+    // Pada struk, yang ditampilkan selalu nilai nominal.
+    double discountAmount = 0;
+
+    if (discNumber > 0) {
+      discountAmount = discNumber;
+    } else if (discPercent > 0) {
+      discountAmount = totalBeforeDisc * discPercent / 100;
+    }
+
+    // =========================================================
+    // PPN
+    // =========================================================
+    final taxAmount = taxVat > 0
+        ? (totalAfterDisc * taxVat / 100).round()
+        : 0;
+
+    // =========================================================
+    // CETAK DISKON (hanya jika ada)
+    // =========================================================
+    if (discountAmount > 0) {
       bytes += generator.row([
         PosColumn(text: 'DISC', width: 8),
         PosColumn(
-          text: formatCurrency(disc),
+          text: '-${formatCurrency(discountAmount.round())}',
           width: 4,
           styles: const PosStyles(
             align: PosAlign.right,
@@ -472,6 +503,29 @@ class PrintService {
       ]);
     }
 
+    // =========================================================
+    // CETAK PPN (hanya jika ada)
+    // =========================================================
+    if (taxVat > 0) {
+      final taxLabel = taxVat == taxVat.toInt()
+          ? 'PPN (${taxVat.toInt()}%)'
+          : 'PPN (${taxVat.toString()}%)';
+
+      bytes += generator.row([
+        PosColumn(text: taxLabel, width: 8),
+        PosColumn(
+          text: formatCurrency(taxAmount),
+          width: 4,
+          styles: const PosStyles(
+            align: PosAlign.right,
+          ),
+        ),
+      ]);
+    }
+
+    // =========================================================
+    // TOTAL
+    // =========================================================
     bytes += generator.row([
       PosColumn(
         text: 'TOTAL',
@@ -479,7 +533,7 @@ class PrintService {
         styles: const PosStyles(bold: true),
       ),
       PosColumn(
-        text: formatCurrency(total),
+        text: formatCurrency(grandTotal.round()),
         width: 4,
         styles: const PosStyles(
           bold: true,
@@ -488,21 +542,30 @@ class PrintService {
       ),
     ]);
 
+    // =========================================================
+    // BAYAR
+    // =========================================================
     bytes += generator.row([
       PosColumn(text: 'BAYAR', width: 8),
       PosColumn(
-        text: formatCurrency(paid),
+        text: formatCurrency(paid.round()),
         width: 4,
         styles: const PosStyles(
           align: PosAlign.right,
         ),
       ),
     ]);
+
+    // =========================================================
+    // KEMBALI
+    // =========================================================
+    // Jika API mengirim nilai negatif, ubah menjadi positif.
+    final absChanged = changed.abs();
 
     bytes += generator.row([
       PosColumn(text: 'KEMBALI', width: 8),
       PosColumn(
-        text: formatCurrency(changed),
+        text: formatCurrency(absChanged.round()),
         width: 4,
         styles: const PosStyles(
           align: PosAlign.right,
@@ -510,6 +573,9 @@ class PrintService {
       ),
     ]);
 
+    // =========================================================
+    // PAYMENT
+    // =========================================================
     bytes += generator.row([
       PosColumn(text: 'PAYMENT', width: 8),
       PosColumn(
