@@ -11,6 +11,7 @@ class PrinterModel {
   final bool autoCut;
   final int port;
   final bool beep;
+  final int footerSpace;
 
   // Jobs printer (Receipt, Order, Bill, dll)
   final List<PrinterJobModel> jobs;
@@ -27,6 +28,7 @@ class PrinterModel {
     required this.autoCut,
     this.beep = false,
     this.port = 9100,
+    this.footerSpace = 3,
     this.jobs = const [],
     this.orderPerCategory = const [],
   });
@@ -50,6 +52,7 @@ class PrinterModel {
       'auto_cut': autoCut,
       'port': port,
       'beep': beep,
+      'footer_space': footerSpace,
 
       // Simpan jobs
       'jobs': jobs.map((e) => e.toJson()).toList(),
@@ -132,6 +135,11 @@ class PrinterModel {
           9100,
 
       beep: parseBool(json['beep'] ?? json['printer_beep'] ?? false),
+
+      footerSpace: int.tryParse(
+            (json['printer_footer_space'] ?? '3').toString(),
+          ) ??
+          3,
 
       // Parse jobs[]
       jobs: (json['jobs'] as List? ?? [])

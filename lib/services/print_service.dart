@@ -553,9 +553,10 @@ class PrintService {
     if (footer != null) {
       bytes += generator.image(footer, align: PosAlign.center);
       bytes += generator.feed(1);
+    } 
+    if(printer.footerSpace > 0) {
+      bytes += generator.feed(printer.footerSpace);
     }
-
-    bytes += generator.feed(1);
 
     bytes += _finalize(generator, printer);
 
@@ -673,7 +674,6 @@ static Future<List<int>> _buildOrderBytes(
     bytes += generator.text(
       '#${category.categoryName}',
       styles: const PosStyles(
-        bold: true,
         align: PosAlign.left,
       ),
     );
@@ -692,8 +692,7 @@ static Future<List<int>> _buildOrderBytes(
         '#$deskNumber',
         styles: const PosStyles(
           align: PosAlign.center,
-          bold: true,
-          height: PosTextSize.size3,
+          height: PosTextSize.size2,
           width: PosTextSize.size3,
         ),
       );
@@ -705,7 +704,6 @@ static Future<List<int>> _buildOrderBytes(
         areaName,
         styles: const PosStyles(
           align: PosAlign.center,
-          bold: true,
           height: PosTextSize.size2,
           width: PosTextSize.size2,
         ),
@@ -725,8 +723,7 @@ static Future<List<int>> _buildOrderBytes(
         customerName.toUpperCase(),
         styles: const PosStyles(
           align: PosAlign.center,
-          bold: true,
-          height: PosTextSize.size2,
+          height: PosTextSize.size1,
           width: PosTextSize.size2,
         ),
       );
@@ -750,9 +747,6 @@ static Future<List<int>> _buildOrderBytes(
     // Header item
     bytes += generator.text(
       'Qty Item',
-      styles: const PosStyles(
-        bold: true,
-      ),
     );
 
     bytes += generator.hr();
@@ -768,9 +762,6 @@ static Future<List<int>> _buildOrderBytes(
       // Contoh: 2 Chicken Wings
       bytes += generator.text(
         '${order.qty} ${order.productName}',
-        styles: const PosStyles(
-          bold: true,
-        ),
       );
 
       // Catatan
@@ -786,9 +777,6 @@ static Future<List<int>> _buildOrderBytes(
     // Total item
     bytes += generator.text(
       '$totalItems ITEM(S)',
-      styles: const PosStyles(
-        bold: true,
-      ),
     );
 
     bytes += generator.hr(ch: '=');
@@ -801,8 +789,11 @@ static Future<List<int>> _buildOrderBytes(
         bold: true,
       ),
     );
-
-    bytes += generator.feed(3);
+    
+    if(printer.footerSpace > 0) {
+      bytes += bytes += generator.feed(printer.footerSpace);
+    }
+    
     if (printer.beep) {
       bytes += _beep(times: 4, duration: 1);
     }
