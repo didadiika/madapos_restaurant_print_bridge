@@ -7,6 +7,11 @@ import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:http/http.dart' as http;
+import 'print_queue_service.dart';
+import 'bluetooth_service.dart';
+import 'network_service.dart';
+import '../constants/printer_connection.dart';
+
 
 import '../models/printer_model.dart';
 
@@ -52,29 +57,37 @@ class PrintService {
   // =========================================================
 
   static Future<void> printTest(PrinterModel printer) async {
-    final bytes = await _buildTestBytes(printer);
-    await _sendToPrinter(bytes, printer);
+    await PrintQueueService.enqueue(() async {
+      final bytes = await _buildTestBytes(printer);
+      await _sendToPrinter(bytes, printer);
+    });
   }
 
   static Future<void> printReceipt(
-    dynamic data,
+    Map<String, dynamic> data,
     PrinterModel printer,
   ) async {
-    final bytes = await _buildReceiptBytes(data, printer);
-    await _sendToPrinter(bytes, printer);
+    await PrintQueueService.enqueue(() async {
+      final bytes = await _buildReceiptBytes(data, printer);
+      await _sendToPrinter(bytes, printer);
+    });
   }
 
   static Future<void> printOrder(
     dynamic data,
     PrinterModel printer,
   ) async {
-    final bytes = await _buildOrderBytes(data, printer);
-    await _sendToPrinter(bytes, printer);
+    await PrintQueueService.enqueue(() async {
+      final bytes = await _buildOrderBytes(data, printer);
+      await _sendToPrinter(bytes, printer);
+    });
   }
 
   static Future<void> pushDrawer(PrinterModel printer) async {
-    final bytes = await _buildDrawerBytes(printer);
-    await _sendToPrinter(bytes, printer);
+    await PrintQueueService.enqueue(() async {
+      final bytes = await _buildDrawerBytes(printer);
+      await _sendToPrinter(bytes, printer);
+    });
   }
 
   // =========================================================
@@ -86,23 +99,17 @@ class PrintService {
     PrinterModel printer,
   ) async {
     try {
-      if (printer.connection == 'bluetooth') {
-        await PrintBluetoothThermal.writeBytes(bytes);
-        return;
-      }
+      if (printer.connection == PrinterConnection.bluetooth) {
+          await connect(printer);
+          await write(bytes);
+          return;
+        }
 
-      if (printer.connection == 'network') {
-        final socket = await Socket.connect(
-          printer.address,
-          printer.port,
-          timeout: const Duration(seconds: 5),
-        );
-
-        socket.add(Uint8List.fromList(bytes));
-        await socket.flush();
-        await socket.close();
-        return;
-      }
+        if (printer.connection == PrinterConnection.network) {
+          await connect(printer);
+          await write(bytes);
+          return;
+        }
 
       throw Exception(
         'Unsupported printer connection: ${printer.connection}',
@@ -560,12 +567,12 @@ class PrintService {
     // KEMBALI
     // =========================================================
     // Jika API mengirim nilai negatif, ubah menjadi positif.
-    final changedValue = changed;
+    final changedValue = changed.abs();
 
     bytes += generator.row([
       PosColumn(text: 'KEMBALI', width: 8),
       PosColumn(
-        text: formatCurrency(changedValue.round()),
+        text: '-${formatCurrency(changedValue.round())}',
         width: 4,
         styles: const PosStyles(
           align: PosAlign.right,
@@ -850,7 +857,7 @@ static Future<List<int>> _buildOrderBytes(
     );
     
     if(printer.footerSpace > 0) {
-      bytes += bytes += generator.feed(printer.footerSpace);
+      bytes += generator.feed(printer.footerSpace);
     }
     
     if (printer.beep) {
@@ -912,64 +919,136 @@ static PrinterModel? _currentPrinter;
 /// BluetoothService.connect().
 ///
 /// Untuk Ethernet kita buka socket dan simpan ke _socket.
-static Future<void> connect(PrinterModel printer) async {
-  _currentPrinter = printer;
+  static PrinterModel? _connectedPrinter;
 
-  if (printer.connection == 'bluetooth') {
-    // Putuskan koneksi lama terlebih dahulu
-    try {
-      await PrintBluetoothThermal.disconnect;
-    } catch (_) {}
-
-    final connected =
-        await PrintBluetoothThermal.connect(
-      macPrinterAddress: printer.address,
-    );
-
-    if (connected != true) {
-      throw Exception(
-        'Gagal connect Bluetooth ke ${printer.address}',
-      );
+  static Future<void> connect(PrinterModel printer) async {
+    // 1. Jika sudah terkoneksi ke printer yang sama, langsung gunakan
+    if (_connectedPrinter?.address == printer.address &&
+        _connectedPrinter?.connection == printer.connection) {
+      debugPrint('Printer sudah terkoneksi.');
+      return;
     }
 
-    return;
+    // 2. Jika ada koneksi sebelumnya, putuskan dulu
+    if (_connectedPrinter != null) {
+      debugPrint('Disconnect printer sebelumnya...');
+      await disconnect();
+
+      // Beri waktu Android melepas socket Bluetooth
+      await Future.delayed(const Duration(seconds: 1));
+    }
+
+    // 3. Retry connect maksimal 3 kali
+    Exception? lastError;
+
+    for (int attempt = 1; attempt <= 3; attempt++) {
+      try {
+        debugPrint(
+          'Connect attempt $attempt/3 ke ${printer.name} (${printer.address})',
+        );
+
+        final success = await _doConnect(printer);
+
+        if (success) {
+          _connectedPrinter = printer;
+          debugPrint('Printer berhasil terhubung.');
+          return;
+        }
+
+        lastError = Exception('Connect mengembalikan false');
+      } catch (e) {
+        lastError = Exception(e.toString());
+        debugPrint('Connect gagal pada attempt $attempt: $e');
+      }
+
+      // Delay sebelum retry berikutnya
+      if (attempt < 3) {
+        await Future.delayed(const Duration(seconds: 1));
+      }
+    }
+
+    // 4. Jika semua percobaan gagal
+    throw lastError ??
+        Exception('Gagal terhubung ke printer setelah 3 percobaan.');
   }
 
-  if (printer.connection == 'network') {
-    _socket = await Socket.connect(
-      printer.address,
-      printer.port,
-      timeout: const Duration(seconds: 5),
-    );
-    return;
-  }
+    static Future<bool> _doConnect(PrinterModel printer) async {
+      switch (printer.connection) {
+        case PrinterConnection.bluetooth:
+          return await BluetoothService.connect(
+            printer.address,
+          );
 
-  throw Exception(
-    'Unsupported printer connection: ${printer.connection}',
-  );
-}
+        case PrinterConnection.network:
+          // Untuk printer network tidak perlu koneksi persisten.
+          // Koneksi dibuat saat write() dipanggil.
+          return true;
+
+        default:
+          throw Exception(
+            'Tipe koneksi tidak didukung: ${printer.connection}',
+          );
+      }
+    }
 
 /// Menulis bytes ke printer yang sedang aktif.
 static Future<void> write(List<int> bytes) async {
-  if (_currentPrinter == null) {
-    throw Exception('Printer belum terkoneksi.');
+  if (_connectedPrinter == null) {
+    throw Exception('Printer belum terkoneksi');
   }
 
-  if (_currentPrinter!.connection == 'bluetooth') {
-    await PrintBluetoothThermal.writeBytes(bytes);
-    return;
-  }
+  final printer = _connectedPrinter!;
 
-  if (_currentPrinter!.connection == 'network') {
-    if (_socket == null) {
-      throw Exception('Socket network belum terbuka.');
-    }
+  switch (printer.connection) {
+    case PrinterConnection.bluetooth:
+      await _writeBluetoothChunked(bytes);
+      break;
 
-    _socket!.add(Uint8List.fromList(bytes));
-    await _socket!.flush();
-    return;
+    case PrinterConnection.network:
+      final result = await NetworkService.printBytes(
+        ip: printer.address,
+        port: printer.port ?? 9100,
+        bytes: Uint8List.fromList(bytes),
+        paperSize: printer.paper == '58'
+            ? PaperSize.mm58
+            : PaperSize.mm80,
+      );
+
+      if (result.toString() != 'PosPrintResult.success') {
+          throw Exception('Gagal print via network: $result');
+        }
+      break;
   }
 }
+
+  static Future<void> _writeBluetoothChunked(
+    List<int> bytes,
+  ) async {
+    const int chunkSize = 1024; // 1 KB per kirim
+
+    for (int i = 0; i < bytes.length; i += chunkSize) {
+      final end =
+          (i + chunkSize < bytes.length)
+              ? i + chunkSize
+              : bytes.length;
+
+      final chunk = bytes.sublist(i, end);
+
+      final ok =
+          await PrintBluetoothThermal.writeBytes(chunk);
+
+      if (!ok) {
+        throw Exception(
+          'Gagal menulis chunk Bluetooth (${i ~/ chunkSize + 1})',
+        );
+      }
+
+      // Beri waktu printer mengosongkan buffer
+      await Future.delayed(
+        const Duration(milliseconds: 50),
+      );
+    }
+  }
 
   /// Membuka cash drawer.
 static Future<void> openCashDrawer() async {
@@ -984,20 +1063,14 @@ static Future<void> openCashDrawer() async {
   /// Menutup koneksi network.
   /// Untuk Bluetooth tidak perlu karena handlePrintData()
   /// memanggil disconnect() setelah setiap printer.
-static Future<void> disconnect() async {
-  if (_currentPrinter?.connection == 'network') {
-    if (_socket != null) {
-      await _socket!.close();
-      _socket = null;
-    }
-  } else if (_currentPrinter?.connection == 'bluetooth') {
+  static Future<void> disconnect() async {
     try {
-      await PrintBluetoothThermal.disconnect;
+      await BluetoothService.disconnect();
+      //await Future.delayed(const Duration(milliseconds: 200));
     } catch (_) {}
-  }
 
-  _currentPrinter = null;
-}
+    _connectedPrinter = null;
+  }
 
   // =========================================================
   // HELPERS

@@ -482,19 +482,20 @@ Future<void> handlePrintData(Map<String, dynamic> root) async {
         debugPrint('Exception: $e');
         debugPrint('StackTrace: $stackTrace');
       } finally {
-        // Tunggu printer benar-benar selesai mencetak
-        await Future.delayed(const Duration(milliseconds: 500));
+        //  debugPrint('Disconnect final...');
+        //   await PrintService.disconnect();
 
-        debugPrint('Disconnecting printer...');
-        await PrintService.disconnect();
-        debugPrint('Printer disconnected.');
+        //   // Beri waktu Android melepaskan socket Bluetooth
+        //   await Future.delayed(
+        //     const Duration(milliseconds: 1000),
+        //   );
 
-        // Tunggu socket Bluetooth benar-benar release
-        //await Future.delayed(const Duration(seconds: 1));
-        await AppBackground.minimize();
+        //   await AppBackground.minimize();
       }
     }
   }
+  await PrintService.disconnect();
+  await AppBackground.minimize();
 
   if (mounted) {
     setState(() {
@@ -885,63 +886,26 @@ void handleUri(Uri uri) async {
             InkWell(
               borderRadius: BorderRadius.circular(100),
               onTap: () async {
-                try {
-                  setState(() {
-                    message = 'Mencetak test page...';
-                  });
+                    try {
+                      setState(() {
+                        message = 'Mencetak test page...';
+                      });
 
-                  // BLUETOOTH harus connect dulu
-                  if (printer.connection ==
-                      PrinterConnection.bluetooth) {
-                    await BluetoothService.disconnect();
+                      await PrintService.printTest(printer);
 
-                    final connected =
-                        await BluetoothService.connect(
-                      printer.address,
-                    );
-
-                    if (!connected) {
                       if (!mounted) return;
                       setState(() {
-                        message =
-                            'Gagal connect printer Bluetooth';
+                        selectedPrinter = printer;
+                        connectedAddress = printer.address;
+                        message = 'Test print selesai';
                       });
-                      return;
+                    } catch (e) {
+                      if (!mounted) return;
+                      setState(() {
+                        message = 'Gagal test print: $e';
+                      });
                     }
-
-                    await Future.delayed(
-                      const Duration(milliseconds: 500),
-                    );
-                  }
-
-                  // CETAK TEST
-                  await PrintService.printTest(
-                    printer,
-                  );
-
-                  // Disconnect Bluetooth setelah print
-                  if (printer.connection ==
-                      PrinterConnection.bluetooth) {
-                    await Future.delayed(
-                      const Duration(milliseconds: 500),
-                    );
-                    await BluetoothService.disconnect();
-                  }
-
-                  if (!mounted) return;
-                  setState(() {
-                    selectedPrinter = printer;
-                    connectedAddress = printer.address;
-                    isConnected = false;
-                    message = 'Test print selesai';
-                  });
-                } catch (e) {
-                  if (!mounted) return;
-                  setState(() {
-                    message = 'Gagal test print: $e';
-                  });
-                }
-              },
+                  },
               child: Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(

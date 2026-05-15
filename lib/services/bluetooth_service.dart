@@ -33,13 +33,9 @@ class BluetoothService {
 
   // =============== (4) CONNECT TO PRINTER ================
   static Future<bool> connect(String macAddress) async {
-    // Putuskan koneksi lama
-    try {
-      await PrintBluetoothThermal.disconnect;
-      await Future.delayed(const Duration(milliseconds: 200));
-    } catch (_) {}
-
-    return await PrintBluetoothThermal.connect(macPrinterAddress: macAddress);
+    return await PrintBluetoothThermal.connect(
+      macPrinterAddress: macAddress,
+    );
   }
   // =============== (4) END CONNECT TO PRINTER ================
 
@@ -47,7 +43,6 @@ class BluetoothService {
   static Future<void> disconnect() async {
     try {
       await PrintBluetoothThermal.disconnect;
-      await Future.delayed(const Duration(milliseconds: 200));
     } catch (_) {}
   }
 
