@@ -935,7 +935,7 @@ static PrinterModel? _currentPrinter;
       await disconnect();
 
       // Beri waktu Android melepas socket Bluetooth
-      await Future.delayed(const Duration(seconds: 1));
+      await Future.delayed(const Duration(milliseconds: 500));
     }
 
     // 3. Retry connect maksimal 3 kali
@@ -1066,7 +1066,7 @@ static Future<void> openCashDrawer() async {
   static Future<void> disconnect() async {
     try {
       await BluetoothService.disconnect();
-      //await Future.delayed(const Duration(milliseconds: 200));
+      await Future.delayed(const Duration(milliseconds: 500));
     } catch (_) {}
 
     _connectedPrinter = null;

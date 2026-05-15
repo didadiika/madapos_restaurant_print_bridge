@@ -423,7 +423,7 @@ class _PrintListenerPageState extends State<PrintListenerPage> {
           debugPrint('Connected to printer.');
 
           // Sangat penting: beri waktu printer Bluetooth siap menerima data
-          await Future.delayed(const Duration(milliseconds: 500));
+          await Future.delayed(const Duration(milliseconds: 200));
 
           // ==========================================
           // EXECUTE JOB
@@ -440,7 +440,7 @@ class _PrintListenerPageState extends State<PrintListenerPage> {
             // Print tambahan jika quantity > 1
             for (int i = 1; i < job.autoprintQuantity; i++) {
               debugPrint('Printing copy ${i + 1}/${job.autoprintQuantity}');
-              await Future.delayed(const Duration(milliseconds: 500));
+              await Future.delayed(const Duration(milliseconds: 200));
               await PrintService.write(bytes);
             }
 
