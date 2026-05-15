@@ -144,7 +144,7 @@ class PrintService {
     );
     if (logo != null) {
       bytes += generator.image(logo, align: PosAlign.center);
-      bytes += generator.feed(1);
+      //bytes += generator.feed(1);
     }
 
     bytes += generator.text(
@@ -178,7 +178,7 @@ class PrintService {
     );
     if (footer != null) {
       bytes += generator.image(footer, align: PosAlign.center);
-      bytes += generator.feed(1);
+      //bytes += generator.feed(1);
     }
 
     bytes += _finalize(generator, printer);
@@ -241,7 +241,7 @@ class PrintService {
           align: PosAlign.center,
         );
 
-        bytes += generator.emptyLines(1);
+        //bytes += generator.emptyLines(1);
       }
     }
 
@@ -271,7 +271,7 @@ class PrintService {
       styles: const PosStyles(align: PosAlign.center),
     );
 
-    bytes += generator.emptyLines(1);
+    //bytes += generator.emptyLines(1);
 
     // =========================================================
     // MEJA / TAKE AWAY
@@ -313,8 +313,8 @@ class PrintService {
         styles: const PosStyles(
           align: PosAlign.center,
           bold: true,
-          height: PosTextSize.size3,
-          width: PosTextSize.size3,
+          height: PosTextSize.size2,
+          width: PosTextSize.size2,
         ),
       );
     }
@@ -344,7 +344,7 @@ class PrintService {
             utf8.encode(code128Data), // List<int>
           ),
           width: 2,
-          height: 60,
+          height: 40,
           font: BarcodeFont.fontA,
           textPos: BarcodeText.none,
         );
@@ -361,7 +361,7 @@ class PrintService {
         debugPrint('Barcode error: $e');
       }
 
-      bytes += generator.emptyLines(1);
+      //bytes += generator.emptyLines(1);
     }
 
     // =========================================================
@@ -560,12 +560,12 @@ class PrintService {
     // KEMBALI
     // =========================================================
     // Jika API mengirim nilai negatif, ubah menjadi positif.
-    final absChanged = changed.abs();
+    final changedValue = changed;
 
     bytes += generator.row([
       PosColumn(text: 'KEMBALI', width: 8),
       PosColumn(
-        text: formatCurrency(absChanged.round()),
+        text: formatCurrency(changedValue.round()),
         width: 4,
         styles: const PosStyles(
           align: PosAlign.right,
@@ -601,7 +601,7 @@ class PrintService {
       }
     }
 
-    bytes += generator.emptyLines(1);
+    //bytes += generator.emptyLines(1);
 
     bytes += generator.text(
       'TERIMA KASIH',
@@ -618,7 +618,7 @@ class PrintService {
     );
     if (footer != null) {
       bytes += generator.image(footer, align: PosAlign.center);
-      bytes += generator.feed(1);
+      //bytes += generator.feed(1);
     } 
     if(printer.footerSpace > 0) {
       bytes += generator.feed(printer.footerSpace);
