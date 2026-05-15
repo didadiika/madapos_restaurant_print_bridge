@@ -1024,7 +1024,7 @@ static Future<void> write(List<int> bytes) async {
   static Future<void> _writeBluetoothChunked(
     List<int> bytes,
   ) async {
-    const int chunkSize = 4096; // 1 KB per kirim
+    const int chunkSize = 5120; // 5 KB per kirim
 
     for (int i = 0; i < bytes.length; i += chunkSize) {
       final end =
