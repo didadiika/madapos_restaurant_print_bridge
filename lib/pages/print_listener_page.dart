@@ -378,7 +378,6 @@ Future<void> handlePrintData(Map<String, dynamic> root) async {
         case 'bill':
           shouldExecute = doBill;
           break;
-        case 'push drawer':
         case 'push_drawer':
           shouldExecute = doPushDrawer;
           break;
