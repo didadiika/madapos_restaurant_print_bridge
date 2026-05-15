@@ -1024,7 +1024,7 @@ static Future<void> write(List<int> bytes) async {
   static Future<void> _writeBluetoothChunked(
     List<int> bytes,
   ) async {
-    const int chunkSize = 1024; // 1 KB per kirim
+    const int chunkSize = 4096; // 1 KB per kirim
 
     for (int i = 0; i < bytes.length; i += chunkSize) {
       final end =
@@ -1045,7 +1045,7 @@ static Future<void> write(List<int> bytes) async {
 
       // Beri waktu printer mengosongkan buffer
       await Future.delayed(
-        const Duration(milliseconds: 50),
+        const Duration(milliseconds: 100),
       );
     }
   }
