@@ -921,56 +921,76 @@ static PrinterModel? _currentPrinter;
 /// Untuk Ethernet kita buka socket dan simpan ke _socket.
   static PrinterModel? _connectedPrinter;
 
-  static Future<void> connect(PrinterModel printer) async {
-    // 1. Jika sudah terkoneksi ke printer yang sama, langsung gunakan
-    if (_connectedPrinter?.address == printer.address &&
-        _connectedPrinter?.connection == printer.connection) {
-      debugPrint('Printer sudah terkoneksi.');
-      return;
-    }
-
-    // 2. Jika ada koneksi sebelumnya, putuskan dulu
-    if (_connectedPrinter != null) {
-      debugPrint('Disconnect printer sebelumnya...');
-      await disconnect();
-
-      // Beri waktu Android melepas socket Bluetooth
-      await Future.delayed(const Duration(milliseconds: 500));
-    }
-
-    // 3. Retry connect maksimal 3 kali
-    Exception? lastError;
-
-    for (int attempt = 1; attempt <= 3; attempt++) {
-      try {
-        debugPrint(
-          'Connect attempt $attempt/3 ke ${printer.name} (${printer.address})',
-        );
-
-        final success = await _doConnect(printer);
-
-        if (success) {
-          _connectedPrinter = printer;
-          debugPrint('Printer berhasil terhubung.');
-          return;
-        }
-
-        lastError = Exception('Connect mengembalikan false');
-      } catch (e) {
-        lastError = Exception(e.toString());
-        debugPrint('Connect gagal pada attempt $attempt: $e');
-      }
-
-      // Delay sebelum retry berikutnya
-      if (attempt < 3) {
-        await Future.delayed(const Duration(seconds: 1));
-      }
-    }
-
-    // 4. Jika semua percobaan gagal
-    throw lastError ??
-        Exception('Gagal terhubung ke printer setelah 3 percobaan.');
+static Future<void> connect(PrinterModel printer) async {
+  // Jika sudah terkoneksi ke printer yang sama, langsung gunakan.
+  // Asumsi: _connectedPrinter hanya di-set jika _doConnect() benar-benar sukses.
+  if (_connectedPrinter?.address == printer.address &&
+      _connectedPrinter?.connection == printer.connection) {
+    debugPrint('Printer sudah terkoneksi.');
+    return;
   }
+
+  // Jika sebelumnya ada printer lain yang terkoneksi, putuskan dulu.
+  if (_connectedPrinter != null) {
+    debugPrint(
+      'Disconnect printer sebelumnya (${_connectedPrinter!.name})...',
+    );
+
+    try {
+      await disconnect();
+    } catch (e) {
+      debugPrint('Disconnect error (diabaikan): $e');
+    }
+
+    // Beri waktu Android melepas socket Bluetooth.
+    await Future.delayed(const Duration(milliseconds: 800));
+
+    // Pastikan state lokal bersih.
+    _connectedPrinter = null;
+  }
+
+  Exception? lastError;
+
+  for (int attempt = 1; attempt <= 3; attempt++) {
+    try {
+      debugPrint(
+        'Connect attempt $attempt/3 ke ${printer.name} (${printer.address})',
+      );
+
+      final success = await _doConnect(printer);
+
+      if (success) {
+        // Simpan state hanya jika benar-benar sukses.
+        _connectedPrinter = printer;
+        debugPrint('Printer berhasil terhubung.');
+        return;
+      }
+
+      // Pastikan state tidak menyimpan printer yang gagal.
+      _connectedPrinter = null;
+      lastError = Exception('Connect mengembalikan false');
+      debugPrint('Connect attempt $attempt gagal: result = false');
+    } catch (e) {
+      // Bersihkan state jika terjadi exception.
+      _connectedPrinter = null;
+      lastError = Exception(e.toString());
+      debugPrint('Connect gagal pada attempt $attempt: $e');
+    }
+
+    // Bersihkan koneksi internal plugin sebelum retry berikutnya.
+    try {
+      await disconnect();
+    } catch (_) {}
+
+    // Delay sebelum retry berikutnya.
+    if (attempt < 3) {
+      await Future.delayed(Duration(seconds: attempt * 2));
+    }
+  }
+
+  throw lastError ??
+      Exception('Gagal terhubung ke printer setelah 3 percobaan.');
+}
 
     static Future<bool> _doConnect(PrinterModel printer) async {
       switch (printer.connection) {
